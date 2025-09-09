@@ -1,0 +1,16 @@
+# Internal Files
+app-v/*
+*.zip
+*.txt
+
+# Project Research/Spec Files
+Specs/*
+Research/*
+Test*/*
+
+# Test Image Files #
+*.png
+*.jpeg
+*.webp
+*.webm
+*.mp4
