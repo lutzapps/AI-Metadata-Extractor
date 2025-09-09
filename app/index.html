@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Metadata Extractor</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!--
+        Define the SVG symbol once
+
+        This is a standard SVG for a clipboard icon with two overlaying squares.
+
+        Add a single, hidden <svg> element to our HTML. A common practice is
+        to place it near the top of the <body>, so it loads early and is ready for use. 
+        Wrap the icon's path data inside a <symbol> tag and give it a unique id.
+
+        Place this somewhere at the beginning of the body, or in a layout file
+
+        aria-hidden="true": Hides the icon from screen readers, as the button already has a text label for accessibility.
+        
+        width and height: Can be set to 1em to match the font size and scale with the button.
+        
+        fill="currentColor": This is a powerful property that tells the SVG to inherit the color property from its parent element (the button).
+        This means we can change the icon color by just changing the text color of the button.
+    -->
+    <svg style="display: none;" aria-hidden="true" width="1em" height="1em" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <symbol id="icon-copy" viewBox="0 0 24 24">
+            <path fill="currentColor" d="M16 11H8V9H16V11Z" />
+            <path fill="currentColor" d="M16 15H8V13H16V15Z" />
+            <path fill="currentColor" d="M12 21.75C12 22.1642 12.3358 22.5 12.75 22.5H19.25C19.6642 22.5 20 22.1642 20 21.75V11.25C20 10.8358 19.6642 10.5 19.25 10.5H12.75C12.3358 10.5 12 10.8358 12 11.25V21.75ZM13.5 12H18.5V20H13.5V12Z" />
+            <path fill="currentColor" d="M4.75 1.5C4.33579 1.5 4 1.83579 4 2.25V12.75C4 13.1642 4.33579 13.5 4.75 13.5H11.25C11.6642 13.5 12 13.1642 12 12.75V2.25C12 1.83579 11.6642 1.5 11.25 1.5H4.75ZM5.5 3H10.5V11H5.5V3Z" />
+        </symbol>
+    </svg>
+
+    <div class="container">
+        <header>
+            <h1>AI Metadata Extractor</h1>
+            <p>Extract ComfyUI workflow, AI generation parameters, and all used Model resources from AI generated CivitAI images and videos.</p>
+        </header>
+
+        <main>
+            <div id="drop-area" class="drop-area">
+                <div class="drop-content">
+                    <svg class="upload-icon" viewBox="0 0 24 24" width="48" height="48">
+                        <path fill="currentColor" d="M19.35,10.04C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.04C2.34,8.36 0,10.91 0,14A6,6 0 0,0 6,20H19A5,5 0 0,0 24,15C24,12.36 21.95,10.22 19.35,10.04M14,13V17H10V13H7L12,8L17,13H14Z" />
+                    </svg>
+                    <h2>Drag & Drop Files Here</h2>
+                    <p>Supports PNG, JPEG, WEBP images and video files</p>
+                    <p>or</p>
+                    <button id="browse-btn" class="browse-btn">Browse Files</button>
+                    <input type="file" id="file-input" accept=".png,.jpg,.jpeg,.webp,.mp4,.avi,.mov,.webm" multiple hidden>
+                </div>
+            </div>
+
+            <div id="results" class="results hidden">
+                <div class="file-info">
+                    <h2>File Information</h2>
+                    <div class="file-info-content">
+                        <div id="file-details"></div>
+                        <div id="media-preview" class="media-preview"></div>
+                    </div>
+                </div>
+
+                <div class="metadata-sections">
+                    <div class="section">
+                        <div class="section-header">
+                            <h2>AI Generation Parameters</h2>
+                            <button class="toggle-btn" data-target="parameters-content">▼</button>
+                        </div>
+                        <div id="parameters-content" class="section-content">
+                            <div id="parameters-data"></div>
+                        </div>
+                        <!-- //CHECK new UI
+                        <div class="button-anchor">
+                            <div class="code-block">
+                                <pre><code>
+                                console.log("Hello Roman!");
+                                </code></pre>
+                                <button class="copy-btn">Copy</button>
+                            </div>
+                        </div>
+                        <div class="button-anchor">
+                            <div class="code-block">
+                                <pre><code>
+                                function greet(name) {
+                                return `Hello, ${name}!`;
+                                }
+                                </code></pre>
+                                <button class="copy-btn">Copy</button>
+                            </div>
+                        </div>
+                         -->
+                        <!-- all <code> divs and <button class="copy-btn"> buttons
+                          are generated by JavaScript filling the "xxx-data" divs -->
+                        <div id="model-hashes-content" class="section-content">
+                            <!-- only CSS styles ".metadata-item" and ".button-anchor
+                              have the "position: relative;" defined to "anchor" the copy button -->
+
+                            <!-- Variante 1: we can enclose the data div in a parent div with class="button-anchor",
+                              to not loose the copy button (to go up to the body) -->
+                            <div class="button-anchor">
+                                <div id="model-hashes-data"></div>
+                            </div>
+                        </div>
+                        <div id="comfyui-inputs-content" class="section-content">
+                            <!-- Variante 2: we can just define the class="button-anchor" on the data div itself -->
+                            <div id="comfyui-inputs-data" class="button-anchor"></div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-header">
+                            <h2>ComfyUI Workflow</h2>
+                            <button class="toggle-btn" data-target="comfyui-content">▼</button>
+                        </div>
+
+                        <div id="comfyui-content" class="section-content">
+                            <div class="button-anchor">
+                                <div id="comfyui-data"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="section">
+                        <div class="section-header">
+                            <h2>Used ComfyUI Nodes</h2>
+                            <button class="toggle-btn" data-target="nodes-content">▼</button>
+                        </div>
+                        <div id="nodes-content" class="section-content">
+                            <div id="nodes-data"></div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-header">
+                            <h2>Raw Metadata</h2>
+                            <button class="toggle-btn" data-target="raw-content">▼</button>
+                        </div>
+                        <div id="raw-content" class="section-content">
+                            <div id="raw-data"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="error-message" class="error-message hidden"></div>
+        </main>
+
+        <footer>
+            <p>AI Metadata Extractor - All processing happens in your browser<br>© 2025 by lutzapps</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/exifreader@4.21.1/dist/exif-reader.js"></script>
+    <script src="js/metadata-extractor.js"></script>
+    <script src="js/parsers.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,726 @@
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    line-height: 1.6;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+html {
+    overflow-x: hidden;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+/* Header styles */
+header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: #2a2a2a;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+    color: #60a5fa;
+    margin-bottom: 10px;
+}
+
+/* Drag and drop area */
+.drop-area {
+    border: 3px dashed #60a5fa;
+    border-radius: 10px;
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background-color: #2a2a2a;
+    margin-bottom: 30px;
+}
+
+.drop-area:hover {
+    background-color: #3a3a3a;
+    border-color: #3b82f6;
+}
+
+.drop-area.active {
+    background-color: #3a3a3a;
+    border-color: #3b82f6;
+}
+
+.drop-area i {
+    font-size: 48px;
+    color: #60a5fa;
+    margin-bottom: 20px;
+    display: block;
+}
+
+/* File input button */
+#file-input {
+    display: none;
+}
+
+#file-button {
+    background-color: #60a5fa;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s ease;
+    margin-top: 20px;
+}
+
+#file-button:hover {
+    background-color: #3b82f6;
+}
+
+/* Error message */
+#error-message {
+    background-color: #dc2626;
+    color: white;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    display: none;
+}
+
+#error-message:not(.hidden) {
+    display: block;
+}
+
+/* Results section */
+#results {
+    display: none;
+}
+
+#results:not(.hidden) {
+    display: block;
+}
+
+/* File info content */
+.file-info-content {
+    display: flex;
+    gap: 20px;
+}
+
+@media (max-width: 768px) {
+    .file-info-content {
+        flex-direction: column;
+    }
+}
+
+/* Media preview */
+.media-preview {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    background-color: #1e1e1e;
+    border-radius: 10px;
+    border: 1px solid #3a3a3a;
+}
+
+.media-preview img, video {
+    max-width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+    border-radius: 5px;
+}
+
+/* Section headers */
+.section-header {
+    background-color: #2a2a2a;
+    padding: 15px 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+.section-header h2 {
+    color: #60a5fa;
+    margin: 0;
+}
+
+.toggle-btn {
+    background: none;
+    border: none;
+    color: #60a5fa;
+    font-size: 20px;
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Metadata sections */
+.metadata-section {
+    background-color: #2a2a2a;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Section content spacing */
+.section-content {
+    margin-bottom: 20px;
+}
+
+.metadata-section h3 {
+    color: #60a5fa;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #3a3a3a;
+    padding-bottom: 10px;
+}
+
+/* Metadata items */
+.metadata-item {
+    /* This is the new positioning context (for copy buttons with 'absolute' position) */
+    position: relative;
+
+    display: flex;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #3a3a3a;
+}
+
+.metadata-item:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.metadata-key {
+    font-weight: bold;
+    color: #93c5fd;
+    min-width: 200px;
+    margin-right: 20px;
+}
+
+.metadata-value {
+    flex: 1;
+    word-break: break-word;
+}
+
+/* ComfyUI workflow, or ComfyUI inputs, or extracted model hashes (all JSON formatted) */
+.comfyui-workflow, .comfyui-inputs, .model-hashes {
+    background-color: #1e1e1e;
+    border: 1px solid #3a3a3a;
+    border-radius: 5px;
+    padding: 15px;
+    margin-bottom: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    white-space: pre-wrap;
+}
+
+/* Copy button old */
+.copy-btn-adv {
+    background-color: #60a5fa;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s ease;
+}
+.copy-btn-adv:hover {
+    background-color: #3b82f6;
+}
+
+/* code block for "Prompts" and "JSON" data */
+.code-block {
+  /*position: relative;*/   /* anchor for absolute button */
+  display: inline-block;
+  margin-bottom: 1em;   /* space between blocks */
+}
+pre {
+  background: #2d2d2d;
+  color: #f8f8f2;
+  padding: 1em;
+  border-radius: 8px;
+  margin: 0;
+  overflow: auto;
+
+  /* FIX: Added properties to force text wrapping */
+  white-space: pre-wrap;
+  word-wrap: break-word; /* For older browsers and long, unbroken words */
+}
+
+.button-anchor {
+    /* This is an additional new positioning context (for copy buttons with 'absolute' position) */
+    position: relative;
+}
+
+button.copy-btn {
+  /* This will now position relative to the next parent,
+  which has "position: relative;" assigned to it
+  can be .metadata-item, or .button-anchor */
+  position: absolute; /* absolute within its parent container */
+  top: 0px;
+  right: 0px;
+  background: #444;
+  color: #fff; /* This color will be inherited by the SVG */
+  border: none;
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 0.8em;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  /* Additional styling for icon button */
+  display: flex; /* Centers the SVG */
+  justify-content: center;
+  align-items: center;
+  width: 28px; /* Set a fixed size for the button */
+  height: 28px;
+  padding: 0; /* Remove default padding */
+}
+
+/* Style for the SVG inside the button */
+button.copy-btn svg {
+  width: 1em; /* Ensures the SVG is sized correctly */
+  height: 1em;
+  fill: currentColor;
+}
+
+button.copy-btn:hover {
+  background: #666;
+}
+/* end of code block for "Prompts" and "JSON" data */
+
+/* Model container */
+.model-container {
+    background-color: #1e1e1e;
+    border: 1px solid #3a3a3a;
+    border-radius: 5px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+/* Style for resolved model links */
+.model-link {
+    color: #60a5fa;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 16px;
+}
+
+.model-link:hover {
+    text-decoration: underline;
+}
+
+/*** Refined Image Gallery CSS ***/
+
+/* gallery-container: Aligns buttons and gallery */
+.gallery-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+    z-index: 20; /* Higher than hover z-index to keep buttons on top */
+}
+
+/* image-gallery: Wrapper for scrollable content */
+.image-gallery {
+    flex-grow: 1; /* Take up available space */
+    overflow: visible; /* Enables pop-out effect */
+    padding: 10px;
+    margin: 10px 0;
+    max-width: 500px;
+    border: 1px solid #3a3a3a;
+    background-color: #1e1e1e;
+    border-radius: 5px;
+    position: relative;
+    z-index: 1; /* Position context for pop-out image */
+}
+
+/* gallery-scroll-inner: Handles the horizontal scrolling */
+.gallery-scroll-inner {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    overflow-x: auto; /* Handles the horizontal scrolling */
+    overflow-y: hidden;
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: #60a5fa #2a2a2a;
+    padding-bottom: 8px; /* Added for scrollbar space */
+    /* REMOVED: width: 100%; This caused conflicts with flexbox and overflow. */
+}
+
+/* image-wrapper: Individual image container */
+.image-wrapper {
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+    flex-grow: 0;
+    flex-basis: auto; /* Use auto for basis to allow it to size based on content */
+}
+
+/* On hover, increase z-index of the wrapper to bring it forward */
+.image-wrapper:hover {
+    z-index: 10;
+}
+
+/* Scale and position the image/video within the wrapper */
+.image-wrapper:hover img,
+.image-wrapper:hover video {
+    transform: translate(-25%, -25%) scale(2);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+    border-color: #60a5fa;
+}
+
+/* Adjust the original image/video styles */
+.image-gallery img,
+.image-gallery video {
+    height: 120px;
+    width: auto;
+    max-width: 200px;
+    min-width: 80px;
+    object-fit: contain;
+    border-radius: 5px;
+    border: 1px solid #3a3a3a;
+    cursor: pointer;
+    transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+    transform: scale(1);
+    transform-origin: center center;
+}
+
+/* Scroll button styling */
+.scroll-btn {
+    background-color: #60a5fa;
+    color: white;
+    border: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: background-color 0.3s ease;
+    flex-shrink: 0;
+    z-index: 21; /* Higher than the gallery container itself */
+}
+.scroll-btn:hover { background-color: #3b82f6; }
+.scroll-btn:disabled { background-color: #4a5568; cursor: not-allowed; }
+
+/* Webkit scrollbar styling */
+.gallery-scroll-inner::-webkit-scrollbar { height: 8px; }
+.gallery-scroll-inner::-webkit-scrollbar-track { background: #2a2a2a; border-radius: 4px; }
+.gallery-scroll-inner::-webkit-scrollbar-thumb { background: #60a5fa; border-radius: 4px; }
+.gallery-scroll-inner::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
+
+.model-image {
+    height: 100px;
+    object-fit: cover;
+    border-radius: 5px;
+    border: 1px solid #3a3a3a;
+}
+
+/* EXIF data styling */
+.exif-data {
+    background-color: #1e1e1e;
+    border: 1px solid #3a3a3a;
+    border-radius: 5px;
+    padding: 15px;
+    margin: 10px 0;
+}
+
+.exif-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+.exif-item:last-child {
+    border-bottom: none;
+}
+
+.exif-item strong {
+    color: #93c5fd;
+    min-width: 150px;
+    margin-right: 15px;
+}
+
+@media (max-width: 768px) {
+    .exif-item {
+        flex-direction: column;
+    }
+    
+    .exif-item strong {
+        margin-bottom: 5px;
+        min-width: auto;
+    }
+}
+
+.image-gallery::-webkit-scrollbar {
+    height: 8px;
+}
+
+.image-gallery::-webkit-scrollbar-track {
+    background: #2a2a2a;
+}
+
+.image-gallery::-webkit-scrollbar-thumb {
+    background: #60a5fa;
+    border-radius: 4px;
+}
+
+/* Download button */
+.download-btn {
+    background-color: #10b981;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s ease;
+    margin-top: 10px;
+}
+
+.download-btn:hover {
+    background-color: #059669;
+}
+
+/* Footer */
+footer {
+    text-align: center;
+    margin-top: 30px;
+    padding: 20px;
+    color: #9ca3af;
+    font-size: 14px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+    
+    .metadata-item {
+        flex-direction: column;
+    }
+    
+    .metadata-key {
+        margin-bottom: 5px;
+    }
+    
+    .drop-area {
+        padding: 20px;
+    }
+    
+    .drop-area i {
+        font-size: 36px;
+    }
+}
+
+/* Image popup modal */
+.image-modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    cursor: zoom-in;
+}
+
+.image-modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.image-modal.zoomed {
+    cursor: zoom-out;
+}
+
+.media-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    position: relative;
+}
+
+.image-modal img,
+.image-modal video {
+    max-width: calc(100vw - 40px);
+    max-height: calc(100vh - 120px);
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    animation: modalFadeIn 0.3s ease-out;
+    transition: transform 0.3s ease;
+    cursor: zoom-in;
+    display: block;
+    margin: auto;
+}
+
+.image-modal img.zoomed,
+.image-modal video.zoomed {
+    cursor: zoom-out;
+    max-width: none;
+    max-height: none;
+    transform-origin: center center;
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.image-modal .close-btn {
+    position: absolute;
+    top: 20px;
+    right: 30px;
+    color: #fff;
+    font-size: 40px;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 1001;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.3s ease;
+}
+
+.image-modal .close-btn:hover {
+    background: rgba(96, 165, 250, 0.8);
+}
+
+.zoom-controls {
+    position: absolute;
+    top: 80px;
+    right: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 1002;
+}
+
+.zoom-btn {
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border: 1px solid #60a5fa;
+    border-radius: 5px;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.3s ease;
+}
+
+.zoom-btn:hover {
+    background: rgba(96, 165, 250, 0.8);
+}
+
+.zoom-btn:disabled {
+    background: rgba(0, 0, 0, 0.3);
+    color: #666;
+    cursor: not-allowed;
+    border-color: #666;
+}
+
+.image-modal .image-info {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-size: 14px;
+    text-align: center;
+    z-index: 1001;
+    pointer-events: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .image-modal img,
+    .image-modal video {
+        max-width: calc(100vw - 20px);
+        max-height: calc(100vh - 100px);
+    }
+    
+    .zoom-controls {
+        top: 60px;
+        right: 15px;
+    }
+    
+    .zoom-btn {
+        width: 35px;
+        height: 35px;
+        font-size: 16px;
+    }
+    
+    .image-modal .close-btn {
+        top: 15px;
+        right: 15px;
+        width: 40px;
+        height: 40px;
+        font-size: 30px;
+    }
+    
+    .image-modal .image-info {
+        bottom: 15px;
+        left: 15px;
+        right: 15px;
+        transform: none;
+        font-size: 12px;
+    }
+}
