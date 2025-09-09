@@ -1,3 +1,6 @@
+# MAC file
+.DS_Store
+
 # Internal Files
 app-v/*
 *.zip
