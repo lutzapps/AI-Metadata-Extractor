@@ -22,6 +22,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     dropArea.addEventListener('drop', handleDrop, false);
 
+    // TEST/SHOW CASE
+    const file = loadTestImage();  // add a fixed Testcase Image (PNG with ComfyUI workflow)
+
     // Functions
     function preventDefaults(e) {
         e.preventDefault();
@@ -119,5 +122,28 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(error => {
                 UI.showError(`Error extracting metadata: ${error.message}`);
             });
+    }
+
+    function loadTestImage() {
+        // add a fixed Testcase Image (PNG with ComfyUI workflow)
+        const testImageUrl = 'https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/9731fe2e-e32b-48f7-8811-25e20bf18ba8/original=true,quality=100/Fox_girl_107.png';
+
+        /* for any reason the IIFE version of this code does not work
+        // Using an Async IIFE (Immediately Invoked Function Expression)
+        (async () => {
+            const file = await UI.loadImage(testImageUrl);
+            processFile(file); // process it
+
+            return file;
+        })();
+        */
+
+        UI.loadImage(testImageUrl)
+            .then(file => {
+            processFile(file); // process it
+        })
+        .catch(error => {
+            console.error("An error occurred:", error);
+        });
     }
 });

@@ -1475,6 +1475,94 @@ ObjectURL (blob:) → better for large files, required for video.
             resetBtn.disabled = false;
         }
     }
+
+    // const imageUrl = 'https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/9731fe2e-e32b-48f7-8811-25e20bf18ba8/original=true,quality=100/Fox_girl_107.png';
+    static async loadImage(imageUrl) {
+        // Load a new image into the app from URL
+
+        // fileName = 'Fox_girl_107.png';
+        const fileName = MetadataExtractor.getFileName(imageUrl);
+        // fileExt = 'png';
+        const fileExt = MetadataExtractor.getFileExtension(imageUrl);
+
+        console.log(`Loading fileName '${fileName}' with fileExt '${fileExt}' from Url ${imageUrl} ...`);
+
+        const response = await fetch(imageUrl);
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+
+        /*
+            get MIME-type from File
+            - either read it from the headers of the image (safe method)
+            - or map it from the file extension (can be faked)
+
+            https://stackoverflow.com/questions/18299806/how-to-check-file-mime-type-with-javascript-before-upload
+
+            https://en.wikipedia.org/wiki/List_of_file_signatures
+
+            https://mimesniff.spec.whatwg.org/#matching-an-image-type-pattern
+            (this one even has an algorithm outlined)
+        */
+
+        // read the first 4-Bytes
+        var arrBytes = (new Uint8Array(arrayBuffer)).subarray(0, 4);
+        var fileHeader = "";
+        for(var i = 0; i < arrBytes.length; i++) {
+            fileHeader += arrBytes[i].toString(16); // HEX notation string
+        }
+        console.log(`4-Byte file header: ${fileHeader}`);
+        
+        // type = 'image/png';
+        let type = undefined;
+
+        // for now we only support PNG, JPEG, WEBP and GIF
+        switch (fileHeader.toUpperCase()) {
+            case "89504E47": // "?PNG"... CR LF SUB LF
+                type = "image/png";
+                break;
+
+            case "52494646": // "RIFF"...size...WEBPVP
+                type = "image/webp";
+                break;
+
+            case "47494638": // "GIF8"...7|8a
+                type = "image/gif";
+                break;
+
+            case "FFD8FFE0":
+            case "FFD8FFE1":
+            case "FFD8FFE2":
+            case "FFD8FFE3":
+            case "FFD8FFE8":
+                type = "image/jpeg";
+                break;
+
+            default: // here we can fall-back to extension mapping
+                type = "unknown"; // Or we can use the blob.type as fallback
+                break;
+        }
+
+        // Create a File-like object
+        const testFile = new File([arrayBuffer], fileName, { type: type });
+
+        // *** this runs fine but does not "trigger" the fileInput processing
+        // for security reasons we need to work with DataTransfers
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(testFile);
+        //const fileInput = document.querySelector('input[type="file"]');
+        const fileInput = document.getElementById('file-input');
+
+        // drop the Test Image for processing
+        fileInput.files = dataTransfer.files;
+
+        console.log(`transfered fileName '${fileName}' with MimeType '${type}' loaded from Url ${imageUrl}`);
+
+        return testFile;
+    }
 }
 
 // Initialize UI when DOM is loaded

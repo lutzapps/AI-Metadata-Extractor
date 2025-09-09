@@ -2827,6 +2827,15 @@ class MetadataExtractor {
         return path;
     }
 
+    static getFileExtension(path) {
+        const lastDot = path.lastIndexOf('.');
+        if (lastDot > -1) {
+            return path.substring(lastDot + 1);
+        }
+
+        return "";
+    }
+
 
     /**
      * Style 1: "Model hash: 217daae812"
