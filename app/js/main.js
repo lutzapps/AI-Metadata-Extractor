@@ -1,4 +1,68 @@
+class main {
+    /* Configurable runtime cache size (in MB)
+
+        ✅ What this gives us:
+        - Offline simulation → easy testing (Google DevTools)
+        - Runtime cache limit → e.g. 20MB max, oldest items get purged first.
+        - Works like a sliding window cache.
+    */
+    static MAX_RUNTIME_CACHE_MB = 20; // e.g. 20 MB
+
+    async enforceRuntimeCacheLimit() {
+        const cache = await caches.open(RUNTIME_CACHE);
+        const requests = await cache.keys();
+
+        let totalSize = 0;
+        const entries = [];
+
+        for (const request of requests) {
+            const response = await cache.match(request);
+            if (response) {
+            const blob = await response.clone().blob();
+            const size = blob.size;
+            totalSize += size;
+            entries.push({ request, size });
+            }
+        }
+
+        // If over limit, evict oldest entries until under
+        while (totalSize > main.MAX_RUNTIME_CACHE_MB * 1024 * 1024 && entries.length > 0) {
+            const entry = entries.shift(); // FIFO → oldest
+            await cache.delete(entry.request);
+            totalSize -= entry.size;
+            console.log(`🗑️ Removed ${entry.request.url} from runtime cache`);
+        }
+    }
+
+    // needs a local WebServer to work
+    static useServiceWorker = false;
+
+}; // END class main
+
+// Make main available globally
+window.main = main;
+
+// Initialize main when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
+    /*
+        Register the service worker in index.html
+
+        ✅ What we get:
+            - Our app will be installable on Chrome/Edge/Firefox/Android/iOS.
+            - If someone adds it to the homescreen, it behaves like a standalone app.
+            - Works offline (at least with cached files).
+    */
+
+    if (main.useServiceWorker && ("serviceWorker" in navigator)) {
+            navigator.serviceWorker.register("js/service-worker.js")
+                .then(() => console.log("✅ Service Worker registered"))
+                .catch(err => console.error("❌ SW registration failed:", err));
+    }
+    else { // hide the 'clear-cache-btn'
+        const clearCacheBtn = document.getElementById('clear-cache-btn');
+        clearCacheBtn.classList.add("hidden");
+    }
+
     const dropArea = document.getElementById('drop-area');
     const fileInput = document.getElementById('file-input');
     const browseBtn = document.getElementById('browse-btn');
@@ -23,8 +87,8 @@ document.addEventListener('DOMContentLoaded', function() {
     dropArea.addEventListener('drop', handleDrop, false);
 
     // TEST/SHOW CASE
-    const file = loadTestImage();  // add a fixed Testcase Image (PNG with ComfyUI workflow)
-
+    //const file = loadTestImage();  // add a fixed Testcase Image (PNG with ComfyUI workflow)
+    
     // Functions
     function preventDefaults(e) {
         e.preventDefault();
@@ -59,69 +123,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // For now, we'll process the first file
         // In a future enhancement, we could process multiple files
         const file = files[0];
-        processFile(file);
-    }
-
-    function processFile(file) {
-        // Store the current file name in a global object for later retrieval (in SAVE operations)
-        window.storedFileName = file.name;
-
-        // Display file information
-        UI.displayFileInformation(file);
-
-        // show img/video preview
-        UI.showMediaPreview(file);
-
-        // Show results section
-        UI.showResults();
-
-        // Extract metadata
-        extractMetadata(file);
-    }
-
-    function extractMetadata(file) {
-        // This function will be implemented in metadata-extractor.js
-        // For now, we'll just show a loading message
-        const parametersDataDiv = document.getElementById('parameters-data');
-        const comfyuiDataDiv = document.getElementById('comfyui-data');
-        const rawDataDiv = document.getElementById('raw-data');
-
-        parametersDataDiv.innerHTML = '<p>Extracting AI generation parameters...</p>';
-        comfyuiDataDiv.innerHTML = '<p>Extracting ComfyUI workflow...</p>';
-        rawDataDiv.innerHTML = '<p>Extracting raw metadata...</p>';
-
-        // Call the metadata extraction function
-        MetadataExtractor.extract(file)
-            .then(metadata => {
-                // Extract prompt from ComfyUI workflow if available, prioritizing workflow data over parameters
-                console.log("Checking for comfyuiWorkflow:", metadata.comfyuiWorkflow);
-                //alert(UI.formatJSON(metadata.raw.prompt)); //FIX
-                if (metadata.comfyuiWorkflow) {
-                    // RL - extract AI Generation Parameters from Workflow Subset provided in metadata.raw.prompt
-                    MetadataExtractor.extractAIGenerationParametersFromMetadataRawPrompt(metadata.raw.prompt, metadata.parameters);
-
-                    console.log("Extracting prompt from workflow");
-                    const promptFromWorkflow = MetadataExtractor.extractPromptFromWorkflow(metadata.comfyuiWorkflow);
-                    //alert("WF-Prompt:\n" + promptFromWorkflow); //FIX
-                    console.log("Prompt from workflow:", promptFromWorkflow);
-                    if (promptFromWorkflow) {
-                        // Always use the workflow prompt (method 2 preferred, method 1 fallback) if available
-                        // instead of only using it when it's longer than the existing prompt
-                        // RL - not use prompt from WF primarily, but keep it as fallback, if no other generation data is found
-                        metadata.parameters['Workflow Prompt'] = promptFromWorkflow;
-                    }
-                }
-                
-                // Resolve model hashes if available
-                return MetadataExtractor.resolveModelHashes(metadata);
-            })
-            .then(metadata => {
-                // Display the extracted metadata
-                UI.displayMetadata(metadata);
-            })
-            .catch(error => {
-                UI.showError(`Error extracting metadata: ${error.message}`);
-            });
+        UI.processFile(file);
     }
 
     function loadTestImage() {
@@ -140,7 +142,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         UI.loadImage(testImageUrl)
             .then(file => {
-            processFile(file); // process it
+            UI.processFile(file); // process it
         })
         .catch(error => {
             console.error("An error occurred:", error);

@@ -19,6 +19,10 @@ html {
 }
 
 .container {
+     /* added for main-buttons-group 'position:absolute'
+      to anchor */
+    position: relative;
+
     max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
@@ -136,13 +140,24 @@ h1 {
     background-color: #1e1e1e;
     border-radius: 10px;
     border: 1px solid #3a3a3a;
+    margin-bottom: 20px; /* some air to breath from the next action */
 }
 
 .media-preview img, video {
     max-width: 100%;
     max-height: 400px;
     object-fit: contain;
-    border-radius: 5px;
+    border-radius: 20px; /* nice rounded corners */
+
+    padding: 10px;
+    transition: transform 0.5s ease;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
+}
+.media-preview:hover img, video {
+    transform: scale(1.5);
+}
+img.zoom-target { /* media-preview.img gets "zoom-target" set */
+    cursor: zoom-in; /* all images with class "zoom-target" have autoZoom() */
 }
 
 /* Section headers */
@@ -158,7 +173,7 @@ h1 {
 }
 
 .section-header h2 {
-    color: #60a5fa;
+    color: #60a5fa; /* match app color style */
     margin: 0;
 }
 
@@ -216,7 +231,7 @@ h1 {
 .metadata-key {
     font-weight: bold;
     color: #93c5fd;
-    min-width: 200px;
+    min-width: 150px; /*200px;*/
     margin-right: 20px;
 }
 
@@ -246,7 +261,7 @@ h1 {
     border: none;
     padding: 8px 16px;
     border-radius: 5px;
-    cursor: pointer;
+    cursor: copy; /*pointer;*/
     font-size: 14px;
     transition: background-color 0.3s ease;
 }
@@ -291,7 +306,7 @@ button.copy-btn {
   border-radius: 5px;
   padding: 4px 8px;
   font-size: 0.8em;
-  cursor: pointer;
+  cursor: copy; /*pointer;*/
   transition: background 0.2s;
 
   /* Additional styling for icon button */
@@ -301,6 +316,18 @@ button.copy-btn {
   width: 28px; /* Set a fixed size for the button */
   height: 28px;
   padding: 0; /* Remove default padding */
+}
+button.copy-btn.bottom {
+    /* overwrite position for modal-media-info's
+        2nd copy button for all image metadata copy
+    */
+    top: auto;
+    bottom: 0px;
+    color: orange; /*#60a5fa; /* match app color style */
+    opacity: 1;
+}
+button.copy-btn.json { /* indicate JSON data for Copy **/
+    color: orange; /*#60a5fa; /* match app color style */
 }
 
 /* Style for the SVG inside the button */
@@ -336,71 +363,58 @@ button.copy-btn:hover {
     text-decoration: underline;
 }
 
-/*** Refined Image Gallery CSS ***/
-
-/* gallery-container: Aligns buttons and gallery */
+/*** Refined Image Gallery CSS GPT-5 ***/
+/* Outer container: aligns scroll buttons + scroll area */
 .gallery-container {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    position: relative;
-    z-index: 20; /* Higher than hover z-index to keep buttons on top */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+  max-width: 100%; /* allow buttons + gallery */
+  z-index: 20; /* Higher than hover z-index to keep buttons on top */
 }
 
-/* image-gallery: Wrapper for scrollable content */
-.image-gallery {
+/* Horizontal scroll track */
+.gallery-scroll {
     flex-grow: 1; /* Take up available space */
-    overflow: visible; /* Enables pop-out effect */
-    padding: 10px;
-    margin: 10px 0;
-    max-width: 500px;
-    border: 1px solid #3a3a3a;
-    background-color: #1e1e1e;
-    border-radius: 5px;
+
+  flex: 1 1 auto; /* allow shrinking if needed */
+  min-width: 0; /* prevents overflow to pushing buttons */
+    /*  fixes right scrollBtn to disappearing
+        critical: lets flexbox shrink instead of overflowing
+        without it, flex items can’t shrink and
+        the right scrollBtn button gets pushed away */
+
+  display: flex;
+    flex-direction: row;
+  gap: 10px;
+    overflow: visible; /* allow pop-outs */  
+  overflow-x: auto; /* Handles the horizontal scrolling */
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  padding: 10px;
+  margin: 10px 0;
+  border: 1px solid #3a3a3a;
+  border-radius: 5px;
+  background-color: #1e1e1e;
+  scrollbar-width: thin;
+  scrollbar-color: #60a5fa #2a2a2a;
+    /*padding-bottom: 8px; /* Added for scrollbar space */
+}
+
+/* Each individual image wrapper container */
+/* Media styles */
+/* Adjust the original image/video styles */
+.gallery-item {
     position: relative;
     z-index: 1; /* Position context for pop-out image */
-}
-
-/* gallery-scroll-inner: Handles the horizontal scrolling */
-.gallery-scroll-inner {
-    display: flex;
-    flex-direction: row;
-    gap: 10px;
-    overflow-x: auto; /* Handles the horizontal scrolling */
-    overflow-y: hidden;
-    scroll-behavior: smooth;
-    scrollbar-width: thin;
-    scrollbar-color: #60a5fa #2a2a2a;
-    padding-bottom: 8px; /* Added for scrollbar space */
-    /* REMOVED: width: 100%; This caused conflicts with flexbox and overflow. */
-}
-
-/* image-wrapper: Individual image container */
-.image-wrapper {
-    position: relative;
-    z-index: 1;
+    flex: 0 0 auto;
+    /*
     flex-shrink: 0;
     flex-grow: 0;
-    flex-basis: auto; /* Use auto for basis to allow it to size based on content */
-}
-
-/* On hover, increase z-index of the wrapper to bring it forward */
-.image-wrapper:hover {
-    z-index: 10;
-}
-
-/* Scale and position the image/video within the wrapper */
-.image-wrapper:hover img,
-.image-wrapper:hover video {
-    transform: translate(-25%, -25%) scale(2);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
-    border-color: #60a5fa;
-}
-
-/* Adjust the original image/video styles */
-.image-gallery img,
-.image-gallery video {
-    height: 120px;
+    flex-basis: auto; /* Use auto for basis to allow it to size based on content
+    */
+    height: var(--gallery-thumb-height, 120px);
     width: auto;
     max-width: 200px;
     min-width: 80px;
@@ -409,42 +423,299 @@ button.copy-btn:hover {
     border: 1px solid #3a3a3a;
     cursor: pointer;
     transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
-    transform: scale(1);
     transform-origin: center center;
 }
 
-/* Scroll button styling */
-.scroll-btn {
-    background-color: #60a5fa;
-    color: white;
-    border: none;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    transition: background-color 0.3s ease;
-    flex-shrink: 0;
-    z-index: 21; /* Higher than the gallery container itself */
+/* On hover, increase z-index of the wrapper to bring it to front */
+/* if this class is not defined, hover flickers */
+/*.gallery-item:hover {
+  z-index: 10;
+}*/
+
+/* Media styles */
+/* Adjust the original image/video styles */
+.gallery-item {
 }
+
+/* Hover effect (will be disabled if you move to JS overlay) */
+/* but it will be "clipped" by the horizontal flex layout */
+.gallery-itemX:hover {
+    /*position: absolute; /* absolute; /* take out of flow */
+
+    /*left: 0; top: 0;*/ /* relative to .gallery-item */
+    /*transform: scale(2);*/
+    /*z-index: 50; /* float above gallery */
+
+  transform: translate(-25%, -25%) scale(var(--gallery-popout-scale, 2)); /* userSettings.galleryPopoutScale */
+
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+  border-color: #60a5fa;
+}
+
+/* Scroll buttons */
+.scroll-btn {
+  background-color: #60a5fa;
+  color: white;
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+  flex-shrink: 0;
+  z-index: 21; /* Higher than the gallery container itself */
+}
+
+/*** Refined Image Gallery CSS ***/
+
 .scroll-btn:hover { background-color: #3b82f6; }
 .scroll-btn:disabled { background-color: #4a5568; cursor: not-allowed; }
 
 /* Webkit scrollbar styling */
-.gallery-scroll-inner::-webkit-scrollbar { height: 8px; }
-.gallery-scroll-inner::-webkit-scrollbar-track { background: #2a2a2a; border-radius: 4px; }
-.gallery-scroll-inner::-webkit-scrollbar-thumb { background: #60a5fa; border-radius: 4px; }
-.gallery-scroll-inner::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
+.gallery-scroll::-webkit-scrollbar { height: 8px; }
+.gallery-scroll::-webkit-scrollbar-track { background: #2a2a2a; border-radius: 4px; }
+.gallery-scroll::-webkit-scrollbar-thumb { background: #60a5fa; border-radius: 4px; }
+.gallery-scroll::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
 
-.model-image {
-    height: 100px;
+.gallery-model-image, .gallery-model-video {
+    height: 100%;
     object-fit: cover;
     border-radius: 5px;
     border: 1px solid #3a3a3a;
 }
+
+.gallery-model-video {
+    border: 1px solid #2caf76;
+}
+
+/* GPT-5 BEGIN Media-Modal */
+.media-modal {
+    position: fixed;
+    z-index: 999;
+
+    inset: 0; /* top:0; right:0; bottom:0; left:0; */
+
+    width: 100%;            /* from media-model-ex */
+    height: 100%;           /* from media-model-ex */
+
+    background: rgba(0, 0, 0, 0.85); /* 0.9 */
+
+    /*cursor: zoom-in;        /* from media-model-ex */
+
+    display: flex;
+    flex-direction: column; /* from media-model-ex */
+    align-items: center;
+    justify-content: center;
+    
+    /* new */
+    padding: 20px; /* breathing room for large viewports */
+    box-sizing: border-box;
+}
+
+/* Hidden state hides the whole modal only */
+/* "hidden" toggle class */
+.media-modal.hidden {
+  display: none;
+}
+
+/* the below style can interfere with clean show/hide logic.
+    Only hide the modal container itself — don't include children in that rule.
+    Hiding only the modal root (.media-modal.hidden)
+    avoids conflicting display rules which made the browser
+    compute weird dimensions for nested children.
+*/
+/*
+.media-modal.hidden img, .media-modal.hidden video {
+  display: none;
+}
+*/
+
+/* Use a different class for media hiding
+    Right now .hidden hides the whole modal.
+    We make a dedicated CSS utility for media.
+    That way our modal root can still use .hidden safely,
+    without conflicting with children.
+*/
+/* "media-hidden" toggle class */
+.media-hidden {
+  display: none !important;
+}
+
+/* Content wrapper for image/video element */
+/* centers and constrains size */
+.media-container {
+    position: relative; /* Important for positioning the image */
+    
+    width: 100%;  /* or the modal's width */
+    height: 100%; /* or the modal's height */
+
+    /* - not in original .media-container-ex
+        force the modal content to never exceed
+        viewport dimensions (with padding).
+    */
+    max-width: 80vw; /* constrain to viewport width */
+    /* 80vw if we want the 'zoom-controls' and 'nav-btn' not overlay the 'modal-media' */
+
+    max-height: 100vh; /* constrain to viewport height */
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    box-sizing: border-box; /* not in -ex */
+    overflow: hidden; /*auto*/ /* optional: prevents accidental overflow */
+}
+
+/* The actual image/video element */
+.modal-media { /* image or video */
+    display: block;
+
+    /* when set to 100%, still keeps aspect ratio and
+        not need 'max-width' for pointed-zoom and overflow */
+    width: auto; /* allow natural aspect ratio */
+    height: auto; /* allow natural aspect ratio */
+
+    /* on the media element ensures the media respects
+        the padding and never overflows the modal.
+
+        if we set 'width' and 'height' attributes to 'auto',
+        we also NEED to set 'max-width and 'max-height' to constrain them,
+        otherwise:
+        - pointed-zoom does not work anymore and
+        - the image overflows its container with its constraining dimension to keep its aspect ratio
+        The effect is that the image is "cropped" at the overflow from the container
+        That also makes the tranlation() calculation for dragging
+        UNRELIABLE and wrong, as we calculate from the containers bounding with
+        "modalContainer.getBoundingClientRect()"
+    */
+    /* nice but (potentally?) looses space */
+    /*max-width: calc(100vw - 40px); /* viewport minus modal padding */
+    /*max-height: calc(100vh - 40px); /* viewport minus modal padding */
+    max-width: 100%;
+    max-height: 100%;
+    
+    /* preserves aspect ratio and scales the media
+        down to fit both width and height constraints.*/
+    object-fit: contain; /* scale down but preserve aspect ratio */
+
+    border-radius: 6px;   /* COSTLY : image has nice rounded corners
+
+    /* from conflicting style .media-modal img, .media-modal video */
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8); /* COSTLY */
+    background: #000; /* black background for letterboxing */
+    animation: modalFadeIn 0.3s ease-out;
+    transition: transform 0.3s ease;
+    margin: inherit; /* makes the img fit better, not use margin:auto; */
+    cursor: zoom-in;
+
+    /*
+        The will-change property provides a hint to the browser
+        that an element is expected to change.
+        This allows the browser to perform optimizations in advance,
+        like promoting the element to its own layer.
+
+        The browser then has time to prepare the element for compositing,
+        reducing the initial "cost" of the animation.
+    */
+    will-change: transform; /* improve performance when animating transforms */
+    transform-style: preserve-3d; /* Use hardware acceleration */
+}
+
+/* in "autov1" (toogle) "zoomed" mode show the zoom-out */
+.modal-media.zoomed.autov1, img.zoomed.autov1 {
+    cursor: zoom-out;
+}
+
+/* the zoomed image (prepare for panning) */
+.modal-media.zoomed {
+    /*position: absolute;*/
+    /* Needed for dragging with top/left, or can be managed with translate */
+    cursor: grab; /* invite the user for dragging */
+}
+.modal-media.zoomed:active {
+    cursor: move;
+}
+.modal-media:not(.zoomed), img.zoom-target:not(.zoomed) {
+    cursor: zoom-in; /* Or any desired default cursor */
+}
+
+/* Spinner centered inside the modal (keeps on top) */
+.modal-spinner {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1100; /* 50 before */
+
+  /* added from first version */
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top: 4px solid #60a5fa;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Navigation buttons & close button */
+/* this NOT used by the 2x modals */
+.close-btn, .nav-btn {
+  position: absolute;
+  z-index: 1200;
+
+  color: #fff;
+  cursor: pointer;
+  user-select: none;
+
+  line-height: 1; /* Ensures "x" is vertically centered */
+  background: none; /* make the button always visible */
+  border: none;
+}
+.close-btn { top: 18px; right: 15px; font-size: 40px; }
+.nav-btn.prev { left: 18px; top: 50%; transform: translateY(-50%); font-size: 32px; }
+.nav-btn.next { right: 18px; top: 50%; transform: translateY(-50%); font-size: 32px; }
+.close-btn.settings { top: 10px; right: 14px; font-size: 32px; }
+/* GPT-5 END Media-Modal */
+
+/* GPT-5 BEGIN Gallery Pop-Out */
+/* Popout overlay */
+.gallery-popout {
+  position: absolute;
+  pointer-events: none;        /* don't steal mouse events */
+  z-index: 9999;               /* above all UI */
+  opacity: 0;
+  transition: opacity .12s ease, transform .12s ease;
+  transform-origin: center center;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #111;
+  box-shadow: 0 14px 40px rgba(0,0,0,.6);
+}
+
+/* visible state */
+.gallery-popout.visible {
+  opacity: 1;
+}
+
+/* contents */
+.gallery-popout img,
+.gallery-popout video {
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  user-select:none;
+  -webkit-user-drag: none;
+}
+/* GPT-5 END Gallery Pop-Out */
+
 
 /* EXIF data styling */
 .exif-data {
@@ -545,136 +816,27 @@ footer {
     }
 }
 
-/* Image popup modal */
-.image-modal {
-    display: none;
+/* Media Modal extended Popup dialog */
+/* not used anymore, only use as template */
+.media-modal-ex { /* TODO */
+    /*display: none;*/
     position: fixed;
-    z-index: 1000;
+    z-index: 999;
     left: 0;
     top: 0;
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.9);
-    cursor: zoom-in;
-}
+    /*cursor: zoom-in;*/
 
-.image-modal.show {
     display: flex;
+    flex-direction: column; /* ??? */
     align-items: center;
     justify-content: center;
-    flex-direction: column;
 }
 
-.image-modal.zoomed {
-    cursor: zoom-out;
-}
-
-.media-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    overflow: auto;
-    position: relative;
-}
-
-.image-modal img,
-.image-modal video {
-    max-width: calc(100vw - 40px);
-    max-height: calc(100vh - 120px);
-    width: auto;
-    height: auto;
-    object-fit: contain;
-    border-radius: 10px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    animation: modalFadeIn 0.3s ease-out;
-    transition: transform 0.3s ease;
-    cursor: zoom-in;
-    display: block;
-    margin: auto;
-}
-
-.image-modal img.zoomed,
-.image-modal video.zoomed {
-    cursor: zoom-out;
-    max-width: none;
-    max-height: none;
-    transform-origin: center center;
-}
-
-@keyframes modalFadeIn {
-    from {
-        opacity: 0;
-        transform: scale(0.8);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
-.image-modal .close-btn {
-    position: absolute;
-    top: 20px;
-    right: 30px;
-    color: #fff;
-    font-size: 40px;
-    font-weight: bold;
-    cursor: pointer;
-    z-index: 1001;
-    background: rgba(0, 0, 0, 0.5);
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color 0.3s ease;
-}
-
-.image-modal .close-btn:hover {
-    background: rgba(96, 165, 250, 0.8);
-}
-
-.zoom-controls {
-    position: absolute;
-    top: 80px;
-    right: 30px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    z-index: 1002;
-}
-
-.zoom-btn {
-    background: rgba(0, 0, 0, 0.7);
-    color: white;
-    border: 1px solid #60a5fa;
-    border-radius: 5px;
-    width: 40px;
-    height: 40px;
-    cursor: pointer;
-    font-size: 18px;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color 0.3s ease;
-}
-
-.zoom-btn:hover {
-    background: rgba(96, 165, 250, 0.8);
-}
-
-.zoom-btn:disabled {
-    background: rgba(0, 0, 0, 0.3);
-    color: #666;
-    cursor: not-allowed;
-    border-color: #666;
-}
-
-.image-modal .image-info {
+/* not used anymore, only use as template */
+.media-modal-ex2 { /* TODO - Not show at all */
     position: absolute;
     bottom: 20px;
     left: 50%;
@@ -689,12 +851,190 @@ footer {
     pointer-events: none;
 }
 
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* manually added this for media-modal .close-btn */
+.media-modal .close-btn {
+    position: absolute;
+    z-index: 1001;
+    top: 8px;
+    right: 5px;
+    color: #fff;
+    font-size: 40px;
+    font-weight: bold;
+    line-height: 1; /* Ensures "x" is vertically centered */
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.3s ease;
+}
+
+/* manually added this for media-modal .close-btn:hover */
+.media-modal .close-btn:hover {
+    background: rgba(96, 165, 250, 0.8);
+}
+
+.zoom-controls {
+    position: absolute;
+    top: 69px;
+    right: 9px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 1002;
+}
+
+.zoom-btn, .current-zoomScale {
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border: 1px solid #60a5fa;
+    border-radius: 5px;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.3s ease;
+}
+.current-zoomScale {
+    color: orange; /* match app color style */
+    font-size: 10px;
+    font-weight:normal;;
+}
+.zoom-btn.in {
+    cursor:zoom-in;
+}
+zoom-btn.reset {
+    cursor:not-allowed;
+}
+.zoom-btn.out {
+    cursor:zoom-out;
+}
+
+.zoom-btn:hover {
+    background: rgba(96, 165, 250, 0.8);
+}
+
+.zoom-btn:disabled {
+    background: rgba(0, 0, 0, 0.3);
+    color: #666;
+    cursor: not-allowed;
+    border-color: #666;
+}
+
+/* modal Enhancements
+    This ensures:
+    It’s always nicely wrapped (word-wrap).
+    Max 30% viewport height → never blocks the whole image.
+    Adds scrolling if prompt is huge.
+
+    When user presses Space, the overlay fades in/out.
+    Background image/video still visible (“shining through” the translucent black).
+    Overlay doesn’t block clicks because of pointer-events: none.
+    (we changed that to support the copy-btn)
+    We can even animate it (fade-in/out) with: opacity and transition
+*/
+/* Info overlay inside modal */
+.modal-media-info {
+    display: block;
+    position: absolute;     /* overlay on top of modal content */
+    z-index: 1100;          /* 1300?, higher than media (999), lower than nav buttons (1200) */
+    /* .modal-media (image/video) has no z-index, neither their container .media-container
+        only the .media-modal dialog has 999 */
+    
+    /*bottom: 20px;             /* stick near bottom */
+    /*left: 50%;                /* horizontally centered */
+    /*transform: translateX(-50%); /* center trick */
+    bottom: 0; /* SUPERv1 */
+    left: 0; /* SUPERv1 */
+    right: 0; /* SUPERv1 */
+
+    opacity: 1;
+
+    border-radius: 6px;
+
+    /*max-width: 80%;          /* keep some breathing room horizontally */
+    /*padding: 12px 16px;*/
+    padding: 10px; /* SUPERv1 */
+
+    /*max-height: 30vh;        /* only cover lower 30% of screen max */
+    max-height: 30%;
+
+    overflow-y: auto;       /* scroll if text is too long */
+
+    white-space: normal;    /* allow wrapping */
+    word-wrap: break-word;  /* break long words if needed */
+
+    background: rgba(0, 0, 0, 0.65); /* 0.6 translucent black background 65% */
+    transition: opacity 0.3s ease;
+    backdrop-filter: blur(4px); /* optional: blur behind text for legibility */
+
+    color: #fff;           /* white text */
+    line-height: 1.4;
+    font-size: var(--info-font-size, 12px); /* userSettings.infoFontSize */
+    
+    /* allow click events for "Copy" button for prompt data */
+    /*pointer-events: none;    /* so clicks pass through to media */
+}
+
+
+/* "hidden" toggle class */
+.modal-media-info.hidden {
+    display: none;
+}
+
+/* BEGIN Visual cue when Shift is held */
+body.shift-mode .gallery-model-image {
+    outline: 2px dashed #60a5fa;
+    outline-offset: 2px;
+}
+
+/* only show zoom-out cursor when media is zoomed already */
+/*body.shift-mode .modal-media.zoomed,*/
+/* class-only rule is overwrittenby higher id-based rule
+    .modal-media img.zoomed
+change to id-based rule:
+    #modal-image.modal-media.zoomed
+*/
+/*body.shift-mode .modal-media.zoomed {*/
+body.shift-mode .zoomed {
+    cursor: zoom-out;
+}
+/* END Visual cue when Shift is held */
+
+/* manually added .media-modal, img/video and for 'close-btn' */
 /* Responsive adjustments */
 @media (max-width: 768px) {
-    .image-modal img,
-    .image-modal video {
-        max-width: calc(100vw - 20px);
-        max-height: calc(100vh - 100px);
+    .modal-media {
+        overflow: scroll;
+        /*max-width: calc(100vw - 20px); /* cuts visible 20px from media, because media-container */
+        /*max-height: calc(100vh - 20px); /* cuts visible 20px from media, because media-container */
+    }
+
+    /*
+    .media-modal {
+        bottom: 15px;
+        left: 15px;
+        right: 15px;
+        transform: none;
+        font-size: 12px;
     }
     
     .zoom-controls {
@@ -702,25 +1042,139 @@ footer {
         right: 15px;
     }
     
-    .zoom-btn {
+    .zoom-btn, .current-zoomScale {
         width: 35px;
         height: 35px;
         font-size: 16px;
     }
-    
-    .image-modal .close-btn {
-        top: 15px;
-        right: 15px;
+
+    .media-modal .close-btn {
+        top: 4px;
+        right: 5px;
         width: 40px;
         height: 40px;
         font-size: 30px;
     }
-    
-    .image-modal .image-info {
-        bottom: 15px;
-        left: 15px;
-        right: 15px;
-        transform: none;
-        font-size: 12px;
-    }
+    */
 }
+
+/* GPT-5 BEGIN Settings */
+.settings-modal {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+}
+/* "hidden" toggle class */
+.settings-modal.hidden { display: none; }
+/* GPT-5 END Settings */
+
+/* GPT-5 BEGIN Settings v2 */
+/* responsive Settings */
+.settings-content {
+    /* for a close button, which uses absolute position: */
+    position: relative; /* Essential for positioning
+    the close button relative to this content */
+    /* make also sure the ".close-btn" is a child of ".settings-content" */
+
+    background: #222;
+    color: #eee;
+    padding: 20px;
+    border-radius: 8px;
+    width: 90%;          /* responsive */
+    max-width: 1200px;   /* keep it sane on ultrawide */
+    max-height: 90vh;    /* fits into viewport */
+    overflow-y: auto;    /* scroll vertically if too tall */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.8);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.settings-content h2 {
+    grid-column: 1 / -1; /* force title full width */
+    margin-top: 0;
+    color: #60a5fa; /* match app color style */
+    text-align: center;
+}
+
+.settings-actions {
+    grid-column: 1 / -1; /* full width row */
+    margin-top: 12px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    position: sticky;    /* stays visible while scrolling */
+    bottom: 0;
+    background: #222;
+    padding-top: 8px;
+}
+
+#settings-btn, #save-settings-btn, #reset-settings-btn, #clear-cache-btn {
+  background: #444;
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.main-buttons-group {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+}
+
+.clear-cache-btn.hidden {
+    display: none;
+}
+
+#settings-btn:hover, #save-settings-btn:hover, #reset-settings-btn:hover, #clear-cache-btn:hover {
+  background: #666;
+  /*transform: translateY(-2px); /* gives a subtle "lift" effect to the buttons */
+  transform: scale(1.02);
+}
+
+.settings-group, .main-buttons-group {
+  /*margin-top: 12px;*/
+  margin: 10px;
+  padding: 8px;
+  border: 1px solid #444;
+  border-radius: 4px;
+}
+.settings-group legend {
+  font-weight: bold;
+  color: #ddd;
+}
+
+/* Tooltips lightweigt, only CSS*/
+label {
+    position: relative;
+    cursor: help;
+}
+
+label[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 0;
+    bottom: 100%;
+    white-space: nowrap;
+    background: #333;
+    color: #eee;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    opacity: 0;
+    transform: translateY(-5px);
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    z-index: 2000;
+}
+
+label[data-tooltip]:hover::after {
+    opacity: 1;
+    transform: translateY(-8px);
+}
+/* GPT-5 END Settings v2 */

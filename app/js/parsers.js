@@ -11,7 +11,6 @@ class MetadataParsers {
 */
 
 
-
 // 1. BEGIN Shared helpers (central point)
 // --- EXIF + XMP Normalizer ---
 
@@ -631,7 +630,7 @@ JPEG/WEBP/PNG all just detect segment/chunk → call same helpers.
 
 
 // renamed from extract to parseWEBMMetadata
-static async parseWEBMMetadata(file, metadata) {
+static async parseWEBMMetadataSimpleNotUsed(file, metadata) {
     // Try to extract metadata from WEBM tags if available
     try {
         //CHECK url code?
@@ -765,6 +764,952 @@ static async parseXMPParameters(xmpData, metadata) {
     return xmpMetaValue;
 }
 
+// Add this as a static async method in your MetadataExtractor class (@Sept 14th, 19:20)
+/*
+How it behaves & integration notes
+It reads only the first N bytes (default 4 MB) — you can raise maxBytes in opts if required.
+It uses a safe VINT reader and steps element-by-element. For each element it samples a snippet (default 4 KB) and looks for your keywords.
+If a match is found it:
+stores a WEBM_elements entry (id hex + snippet),
+sets/concats metadata.raw.parameters,
+calls your shared MetadataExtractor.extractParsedMetadata("parameters", snippet, metadata) so your existing parsing pipeline runs.
+If nothing meaningful is found in the EBML walk it falls back to fallbackTextSearchFromBuffer() (which you already have) to scan raw bytes for textual tokens.
+The parser is conservative: it clamps sizes, limits recursion depth, and avoids loading entire huge payloads.
+Caveats & suggestions
+EBML/Matroska element IDs and master vs leaf typing: a fully spec-compliant parser would use the EBML element table (and Matroska schema) to know which IDs are master elements and which are binary/video frames; I avoided embedding a full schema to keep the code dependency-free and compact.
+If you find real ComfyUI metadata consistently inside known EBML element IDs (e.g. Tags → SimpleTag → TagString), we can add explicit handling for those IDs to extract the full strings rather than sampling snippets.
+If you later feel brave and want full correctness, we can:
+add a small static table with Matroska/EBML IDs you care about (Tags, SimpleTag, TagName, TagString) so recursion is deterministic; OR
+add a very-small EBML schema classifier — still without external libs.
+*/
+static async parseWEBMMetadataNotWork(file, metadata, opts = {}) {
+    // options
+    const MAX_BYTES = opts.maxBytes || 4 * 1024 * 1024; // read up to 4MB by default
+    const MAX_ELEMENT_SNIPPET = opts.maxSnippet || 4096; // how many bytes of element payload we sample
+    const MAX_DEPTH = opts.maxDepth || 6; // recursion limit
+
+    // small helper: read up to `MAX_BYTES` from the file
+    async function readHead(file, size) {
+        const slice = file.slice(0, Math.min(file.size, size));
+        return new Uint8Array(await slice.arrayBuffer());
+    }
+
+    // read head
+    let bytes;
+    try {
+        bytes = await readHead(file, MAX_BYTES);
+    } catch (e) {
+        metadata.raw = metadata.raw || {};
+        metadata.raw.webmReadError = `Failed to read file head: ${e.message}`;
+        return metadata;
+    }
+
+    if (!bytes || bytes.length < 4) {
+        return metadata;
+    }
+
+    // quick signature check for EBML header (Matroska/WebM): 0x1A45DFA3
+    if (!(bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3)) {
+        // Not starting with EBML header — fallback to text sniff
+        await this.fallbackTextSearchFromBuffer(bytes.buffer, metadata);
+        return metadata;
+    }
+
+    // Read VINT (value and length) per EBML rules.
+    // Returns { value: Number, length: Number } and DOES NOT move any external offset.
+    function readVintInfo(buf, offset) {
+        if (offset >= buf.length) throw new Error("readVintInfo: offset out of range");
+        const first = buf[offset];
+        if (first === 0x00) throw new Error("Invalid VINT (first byte 0x00)");
+        let mask = 0x80;
+        let length = 1;
+        // determine length: number of leading zero bits before first 1 (max 8)
+        while ((first & mask) === 0) {
+            mask >>= 1;
+            length++;
+            if (length > 8) throw new Error("VINT length > 8 not supported");
+        }
+        if (offset + length > buf.length) throw new Error("VINT length extends beyond buffer");
+        // value: lower bits of first byte + following bytes
+        let value = first & (mask - 1); // mask -1 leaves lower bits
+        for (let i = 1; i < length; i++) {
+            value = (value << 8) | buf[offset + i];
+        }
+        return { value, length };
+    }
+
+    // Utility: hex string for the ID bytes (for logging & debugging)
+    function idHex(buf, off, len) {
+        const arr = [];
+        for (let i = 0; i < len && (off + i) < buf.length; i++) {
+            arr.push(buf[off + i].toString(16).padStart(2, "0"));
+        }
+        return arr.join("").toUpperCase();
+    }
+
+    // Heuristic: decode snippet as UTF-8, then fallback to latin1 on poor result
+    function decodeSnippet(buf, off, len) {
+        const slice = buf.subarray(off, Math.min(off + len, buf.length));
+        const utf8 = new TextDecoder("utf-8", { fatal: false }).decode(slice);
+        // quick printable ratio checker
+        let printable = 0;
+        for (let i = 0; i < utf8.length; i++) {
+            const c = utf8.charCodeAt(i);
+            if (c === 9 || c === 10 || c === 13 || (c >= 32 && c < 127)) printable++;
+        }
+        const ratio = printable / Math.max(1, utf8.length);
+        if (ratio < 0.5) {
+            // try latin1 / windows-1252-ish fallback by treating bytes as single chars
+            let latin = "";
+            for (let i = 0; i < slice.length; i++) latin += String.fromCharCode(slice[i]);
+            return latin;
+        }
+        return utf8;
+    }
+
+    // main recursive parser that walks EBML elements between [start, end)
+    async function walkElements(buf, start, end, depth) {
+        if (depth > MAX_DEPTH) return false;
+        let offset = start;
+
+        while (offset < end) {
+            try {
+                // read ID (VINT) at offset
+                const idInfo = readVintInfo(buf, offset);
+                const idLen = idInfo.length;
+                const idVal = idInfo.value;
+                const idHexStr = idHex(buf, offset, idLen);
+
+                offset += idLen;
+                if (offset >= buf.length) break;
+
+                // read size (VINT)
+                const sizeInfo = readVintInfo(buf, offset);
+                const sizeLen = sizeInfo.length;
+                let sizeVal = sizeInfo.value;
+                offset += sizeLen;
+
+                // guard: element payload bounds
+                let payloadStart = offset;
+                let payloadEnd = offset + sizeVal;
+
+                // if payloadEnd beyond buffer we clamp to buffer length
+                if (payloadEnd > buf.length) {
+                    payloadEnd = buf.length;
+                }
+
+                // Safety: if size is obviously bogus (huge) clamp and continue
+                if (sizeVal <= 0 || payloadStart >= payloadEnd) {
+                    // if size is zero => skip
+                    // but some elements use "unknown size" encoded with all 1s — we don't try to handle that fully here
+                    offset = payloadEnd;
+                    continue;
+                }
+
+                // sample a snippet of the payload and look for keywords
+                const snippetLen = Math.min(MAX_ELEMENT_SNIPPET, payloadEnd - payloadStart);
+                if (snippetLen > 0) {
+                    const text = decodeSnippet(buf, payloadStart, snippetLen);
+                    if (/parameters|workflow|prompt/i.test(text)) {
+                        // Found candidate metadata
+                        const cleaned = text.replace(/\0/g, " ").trim();
+                        metadata.raw = metadata.raw || {};
+                        // store found element with a little context
+                        if (!metadata.raw.WEBM_elements) metadata.raw.WEBM_elements = [];
+                        metadata.raw.WEBM_elements.push({
+                            id: idHexStr,
+                            offset: payloadStart,
+                            size: Math.min(sizeVal, MAX_ELEMENT_SNIPPET),
+                            snippet: cleaned.slice(0, 2000)
+                        });
+
+                        // prefer the snippet that contains the keyword as parameters
+                        if (!metadata.raw.parameters) {
+                            metadata.raw.parameters = cleaned;
+                        } else {
+                            metadata.raw.parameters += "\n" + cleaned;
+                        }
+
+                        // run your central metadata parser
+                        try {
+                            await MetadataExtractor.extractParsedMetadata("parameters", cleaned, metadata);
+                        } catch (e) {
+                            // ignore parse errors, but keep stored raw text
+                            console.warn("extractParsedMetadata failed on WEBM snippet:", e);
+                        }
+
+                        // we can return early if that is enough
+                        return true;
+                    }
+                }
+
+                // Try recursion into payload for nested elements — some EBML masters are containers
+                // We don't rely on known element IDs for masters; we just attempt recursion
+                // for reasonably-sized payloads (to avoid scanning huge binary frames).
+                const TRY_RECURSE_THRESHOLD = 1024 * 1024; // 1MB
+                if ((payloadEnd - payloadStart) <= TRY_RECURSE_THRESHOLD) {
+                    const found = await walkElements(buf, payloadStart, payloadEnd, depth + 1);
+                    if (found) return true;
+                }
+
+                // advance to next element
+                offset = payloadEnd;
+            } catch (e) {
+                // Any parsing error: abort EBML walk (we've likely hit binary data or truncated VINT)
+                console.debug("EBML walk aborted at depth", depth, "error:", e.message);
+                break;
+            }
+        }
+
+        return false;
+    }
+
+    // run the walker over what we've read
+    try {
+        const found = await walkElements(bytes, 0, bytes.length, 0);
+        if (found) {
+            // keep metadata.raw.WEBM_elements and metadata.raw.parameters
+            return metadata;
+        }
+    } catch (e) {
+        // proceed to fallback
+        console.warn("WEBM EBML walker threw:", e);
+    }
+
+    // final fallback: do a general textual scan of the buffer (UTF-8 + latin1 if needed)
+    await this.fallbackTextSearchFromBuffer(bytes.buffer, metadata);
+
+    return metadata;
+}
+
+/*
+✅ What this adds & fixes
+We now explicitly look for the “TagName / TagString” fields where metadata is intended to be stored in WebM/Matroska. That means fewer false positives from video frames or binary blobs.
+The snippet decode is stricter (printable ratio cut off lower) so random binary chunks are skipped unless they contain human‐readable strings.
+If no metadata found via these tag fields, fallback text scanning remains (buffer scan) so you don’t lose anything.
+If you like, I can also build a similar ID‐table version for MP4 (QuickTime atoms for metadata), so your parseMP4Metadata becomes similarly accurate. Do you want that next?
+*/
+
+static async parseWEBMMetadataNW2(file, metadata, opts = {}) {
+    const MAX_BYTES = opts.maxBytes || 4 * 1024 * 1024;
+    const MAX_SNIPPET = opts.maxSnippet || 4096;
+    const MAX_DEPTH = opts.maxDepth || 6;
+
+    // Matroska/WEBM ID table
+    const MK = {
+        Tags: 0x1254C367,
+        Tag: 0x7373,
+        SimpleTag: 0x67C8,
+        TagName: 0x7BA9,
+        TagString: 0x4487
+    };
+
+    async function readHead(file, size) {
+        const slice = file.slice(0, Math.min(file.size, size));
+        return new Uint8Array(await slice.arrayBuffer());
+    }
+
+    let buf;
+    try {
+        buf = await readHead(file, MAX_BYTES);
+    } catch (e) {
+        metadata.raw = metadata.raw || {};
+        metadata.raw.webmReadError = `Failed to read first ${MAX_BYTES} bytes: ${e.message}`;
+        return metadata;
+    }
+    if (!buf || buf.length < 4) {
+        return metadata;
+    }
+    // Signature check
+    if (!(buf[0] === 0x1A && buf[1] === 0x45 && buf[2] === 0xDF && buf[3] === 0xA3)) {
+        // Not WEBM / EBML
+        await this.fallbackTextSearchFromBuffer(buf.buffer, metadata);
+        return metadata;
+    }
+
+    // VINT reader
+    function readVintInfo(b, offset) {
+        if (offset >= b.length) throw new Error("readVintInfo: offset OOB");
+        const first = b[offset];
+        if (first === 0x00) throw new Error("readVintInfo: leading zero invalid");
+        let mask = 0x80;
+        let length = 1;
+        while ((first & mask) === 0) {
+            mask >>= 1;
+            length++;
+            if (length > 8) throw new Error("VINT length >8 not supported");
+        }
+        if (offset + length > b.length) throw new Error("VINT length extends beyond buffer");
+        let value = first & (mask - 1);
+        for (let i = 1; i < length; i++) {
+            value = (value << 8) | b[offset + i];
+        }
+        return { value, length };
+    }
+
+    function readUint(b, offset, size) {
+        // read big-endian unsigned integer — up to 4 bytes comfortably
+        if (offset + size > b.length) throw new Error("readUint out of bounds");
+        let v = 0;
+        for (let i = 0; i < size; i++) {
+            v = (v << 8) | b[offset + i];
+        }
+        return v;
+    }
+
+    // converter for ID bytes to number
+    // ID encoded as VINT, but for known IDs we know their binary representation
+    function idFromBytes(b, offset, idLen) {
+        // For known small-length IDs, could parse
+        // But simplest: read the idLen bytes and interpret as big-endian
+        try {
+            return readUint(b, offset, idLen);
+        } catch(e) {
+            return null;
+        }
+    }
+
+    // snippet decoder
+    function decodeSnippet(b, off, len) {
+        const slice = b.subarray(off, Math.min(off + len, b.length));
+        const utf8 = new TextDecoder("utf-8", { fatal: false }).decode(slice);
+        let printable = 0;
+        for (let i = 0; i < utf8.length; i++) {
+            const c = utf8.charCodeAt(i);
+            if (c === 9 || c === 10 || c === 13 || (c >= 32 && c < 127)) printable++;
+        }
+        const ratio = printable / Math.max(1, utf8.length);
+        if (ratio < 0.3) {  // more strict now
+            // fallback Latin1
+            let s = "";
+            for (let i = 0; i < slice.length; i++) s += String.fromCharCode(slice[i]);
+            return s;
+        }
+        return utf8;
+    }
+
+    // walk EBML but focus into Tags → Tag → SimpleTag → TagName / TagString
+    async function walkTags(b, start, end, depth) {
+        if (depth > MAX_DEPTH) return false;
+        let offset = start;
+
+        while (offset < end) {
+            let savedOffset = offset;
+            try {
+                const idInfo = readVintInfo(b, offset);
+                const idLen = idInfo.length;
+                const idVal = idInfo.value;
+                offset += idLen;
+                if (offset >= b.length) break;
+
+                const sizeInfo = readVintInfo(b, offset);
+                const sizeLen = sizeInfo.length;
+                const sizeVal = sizeInfo.value;
+                offset += sizeLen;
+
+                const payloadStart = offset;
+                let payloadEnd = offset + sizeVal;
+                if (payloadEnd > b.length) payloadEnd = b.length;
+
+                // If this is a container tag (Tags, Tag, SimpleTag), recurse in
+                if (idVal === MK.Tags || idVal === MK.Tag || idVal === MK.SimpleTag) {
+                    const found = await walkTags(b, payloadStart, payloadEnd, depth + 1);
+                    if (found) return true;
+                }
+                // If this is one of the leaf metadata fields: TagName or TagString
+                else if (idVal === MK.TagName || idVal === MK.TagString) {
+                    const snippetLen = Math.min(MAX_SNIPPET, payloadEnd - payloadStart);
+                    if (snippetLen > 0) {
+                        const text = decodeSnippet(b, payloadStart, snippetLen);
+                        if (/parameters|workflow|prompt/i.test(text)) {
+                            metadata.raw = metadata.raw || {};
+                            const cleaned = text.replace(/\0/g, " ").trim();
+                            if (!metadata.raw.WEBM_tagFields) metadata.raw.WEBM_tagFields = [];
+                            metadata.raw.WEBM_tagFields.push({
+                                id: idVal.toString(16),
+                                snippet: cleaned
+                            });
+                            if (!metadata.raw.parameters) metadata.raw.parameters = cleaned;
+                            else metadata.raw.parameters += "\n" + cleaned;
+
+                            try {
+                                await MetadataExtractor.extractParsedMetadata("parameters", cleaned, metadata);
+                            } catch (e) {
+                                console.warn("extractParsedMetadata error in WEBM TagName/TagString:", e);
+                            }
+                            return true;
+                        }
+                    }
+                }
+
+                offset = payloadEnd;
+            } catch (e) {
+                console.debug("WEBM walkTags error at offset", savedOffset, "depth", depth, e.message);
+                break;
+            }
+        }
+        return false;
+    }
+
+    // run it
+    try {
+        const found = await walkTags(buf, 0, buf.length, 0);
+        if (found) {
+            return metadata;
+        }
+    } catch (e) {
+        console.warn("WEBM tag-based walker threw:", e);
+    }
+
+    // fallback
+    await this.fallbackTextSearchFromBuffer(buf.buffer, metadata);
+    return metadata;
+}
+
+// --- WEBM / Matroska metadata parser ---
+static async parseWEBMMetadataNW3(file, metadata) {
+    const buf = new Uint8Array(await file.arrayBuffer());
+
+    // Proper EBML ID reader (IDs keep the "class bits")
+    function readEbmlId(b, offset) {
+        const first = b[offset];
+        let mask = 0x80;
+        let length = 1;
+        while ((first & mask) === 0) {
+            mask >>= 1;
+            length++;
+            if (length > 4) break; // max 4 bytes
+        }
+        if (offset + length > b.length) throw new Error("EBML ID truncated");
+        let value = 0;
+        for (let i = 0; i < length; i++) {
+            value = (value << 8) | b[offset + i];
+        }
+        return { value, length };
+    }
+
+    // EBML size parser (strip class bits)
+    function readVintInfo(b, offset) {
+        const first = b[offset];
+        let mask = 0x80;
+        let length = 1;
+        while ((first & mask) === 0) {
+            mask >>= 1;
+            length++;
+            if (length > 8) break;
+        }
+        if (offset + length > b.length) throw new Error("VINT truncated");
+        let value = first & (mask - 1);
+        for (let i = 1; i < length; i++) {
+            value = (value << 8) | b[offset + i];
+        }
+        return { value, length };
+    }
+
+    // Matroska IDs of interest
+    const IDS = {
+        Tags: 0x1254C367,
+        Tag: 0x7373,
+        SimpleTag: 0x67C8,
+        TagName: 0x45A3,
+        TagString: 0x4487
+    };
+
+    const decoder = new TextDecoder("utf-8", { fatal: false });
+
+    async function walk(b, start, end, depth) {
+        let off = start;
+        let found = false;
+
+        while (off < end) {
+            if (off >= b.length) break;
+
+            // --- read ID ---
+            let idInfo;
+            try {
+                idInfo = readEbmlId(b, off);
+            } catch {
+                break;
+            }
+            const idVal = idInfo.value;
+            off += idInfo.length;
+            if (off >= b.length) break;
+
+            // --- read size ---
+            let sizeInfo;
+            try {
+                sizeInfo = readVintInfo(b, off);
+            } catch {
+                break;
+            }
+            const dataLen = sizeInfo.value;
+            off += sizeInfo.length;
+
+            const payloadStart = off;
+            const payloadEnd = payloadStart + dataLen;
+            if (payloadEnd > end) break; // malformed
+
+            if (idVal === IDS.Tags || idVal === IDS.Tag || idVal === IDS.SimpleTag) {
+                // Recurse into these containers
+                const ok = await walk(b, payloadStart, payloadEnd, depth + 1);
+                if (ok) found = true;
+            } else if (idVal === IDS.TagName) {
+                const tagName = decoder.decode(b.subarray(payloadStart, payloadEnd)).trim();
+                metadata.raw.lastTagName = tagName; // temp stash
+            } else if (idVal === IDS.TagString) {
+                const tagVal = decoder.decode(b.subarray(payloadStart, payloadEnd)).trim();
+                const tagName = metadata.raw.lastTagName || "UnknownTag";
+                if (/parameters|workflow|prompt/i.test(tagName) || /parameters|workflow|prompt/i.test(tagVal)) {
+                    if (!metadata.raw.WEBM_tags) metadata.raw.WEBM_tags = [];
+                    metadata.raw.WEBM_tags.push({ name: tagName, value: tagVal });
+
+                    metadata.raw.parameters = tagVal;
+                    await MetadataExtractor.extractParsedMetadata("parameters", tagVal, metadata);
+                    found = true;
+                }
+            }
+
+            off = payloadEnd;
+        }
+
+        return found;
+    }
+
+    try {
+        const found = await walk(buf, 0, buf.length, 0);
+        if (found) {
+            return metadata;
+        }
+    } catch (e) {
+        console.warn("WEBM EBML walker failed:", e);
+    }
+
+    // fallback: 1MB text sniff
+    await this.fallbackTextSearchFromBuffer(buf.buffer, metadata);
+    return metadata;
+}
+
+static async parseMP4Metadata(file, metadata, opts = {}) {
+    // Dedicated MP4/ISO-BMFF metadata extractor (ilst / Apple-style atoms)
+    const MAX_BYTES = opts.maxBytes || (8 * 1024 * 1024); // read whole file by default up to 8MB
+    const MAX_BOXES = opts.maxBoxes || 20000;
+    const buf = new Uint8Array(await file.arrayBuffer());
+    const len = buf.length;
+    const decoder = new TextDecoder("utf-8", { fatal: false });
+
+    metadata.raw = metadata.raw || {};
+    metadata.raw.boxes = metadata.raw.boxes || [];
+
+    function readUint32BE(b, off) {
+        if (off + 4 > len) return 0;
+        return (b[off] << 24) | (b[off + 1] << 16) | (b[off + 2] << 8) | (b[off + 3]);
+    }
+
+    function readBoxHeader(b, off) {
+        // Returns null on invalid header
+        if (off + 8 > len) return null;
+        let size = readUint32BE(b, off);
+        const type = String.fromCharCode(b[off + 4], b[off + 5], b[off + 6], b[off + 7]);
+        let headerSize = 8;
+
+        if (size === 1) {
+            // largesize (64-bit) — read next 8 bytes
+            if (off + 16 > len) return null;
+            const hi = readUint32BE(b, off + 8);
+            const lo = readUint32BE(b, off + 12);
+            size = hi * 4294967296 + lo;
+            headerSize = 16;
+        } else if (size === 0) {
+            // box extends to end of file
+            size = len - off;
+        }
+
+        const end = off + size;
+        return { size, type, start: off, headerSize, end: Math.min(end, len) };
+    }
+
+    function recordBox(h, path = "") {
+        metadata.raw.boxes.push({
+            type: h.type,
+            start: h.start,
+            end: h.end,
+            headerSize: h.headerSize,
+            path
+        });
+    }
+
+    // Recursively find a nested path of boxes (e.g. ['moov','udta','meta','ilst'])
+    function findBoxes(b, start, end, path, depth = 0) {
+        let off = start;
+        let iterations = 0;
+
+        while (off + 8 <= end && off < len) {
+            if (++iterations > MAX_BOXES) break;
+            const h = readBoxHeader(b, off);
+            if (!h || h.headerSize <= 0) break;
+
+            recordBox(h, path.slice(0, depth + 1).join('/'));
+
+            const payloadStart = h.start + h.headerSize;
+            const payloadEnd = Math.min(h.end, end);
+
+            if (h.type === path[0]) {
+                if (path.length === 1) {
+                    // found the desired box; return payload bounds
+                    return { box: h, payloadStart, payloadEnd };
+                } else {
+                    // descend into this box searching for remaining path
+                    const res = findBoxes(b, payloadStart, payloadEnd, path.slice(1), depth + 1);
+                    if (res) return res;
+                }
+            }
+
+            // special case: 'meta' often contains 4 bytes version/flags before child boxes
+            if (h.type === 'meta') {
+                const metaPayloadStart = payloadStart + 4; // skip version/flags
+                const res = findBoxes(b, metaPayloadStart, payloadEnd, path, depth + 1);
+                if (res) return res;
+            }
+
+            // advance
+            if (h.end <= off) {
+                // ensure progress
+                off = off + h.headerSize;
+            } else {
+                off = h.end;
+            }
+        }
+
+        return null;
+    }
+
+    // Parse 'ilst' atom structure: each child is a key-box which contains 'data' (and for '----' custom keys the 'name' child)
+    function parseIlst(b, start, end) {
+        const out = {};
+        let off = start;
+        let iterations = 0;
+
+        while (off + 8 <= end && off < len) {
+            if (++iterations > MAX_BOXES) break;
+            const keyH = readBoxHeader(b, off);
+            if (!keyH) break;
+
+            const keyType = keyH.type;
+            const keyPayloadStart = keyH.start + keyH.headerSize;
+            const keyPayloadEnd = Math.min(keyH.end, end);
+
+            // store encountered key box
+            // (note: we'll also have recorded it earlier in findBoxes when walking the parent tree)
+            // iterate children inside this key box
+            let innerOff = keyPayloadStart;
+            let foundName = null;
+            let foundDataValue = null;
+
+            // first pass to find 'name' (for '----' keys)
+            while (innerOff + 8 <= keyPayloadEnd) {
+                const childH = readBoxHeader(b, innerOff);
+                if (!childH) break;
+                if (childH.type === 'name') {
+                    const ns = decoder.decode(b.subarray(childH.start + childH.headerSize, Math.min(childH.end, keyPayloadEnd))).replace(/\0/g, '').trim();
+                    if (ns.length) foundName = ns;
+                    break;
+                }
+                if (childH.end <= innerOff) innerOff += childH.headerSize; else innerOff = childH.end;
+            }
+
+            // second pass: find 'data' child(s)
+            innerOff = keyPayloadStart;
+            while (innerOff + 8 <= keyPayloadEnd) {
+                const childH = readBoxHeader(b, innerOff);
+                if (!childH) break;
+                const childType = childH.type;
+                const dataStart = childH.start + childH.headerSize;
+                const dataEnd = Math.min(childH.end, keyPayloadEnd);
+
+                if (childType === 'data') {
+                    // Apple data boxes often start with 4 bytes type/flags + 4 bytes locale / reserved.
+                    // Skip first 8 bytes when present to reach actual payload.
+                    let payloadStart = dataStart;
+                    const skip = 8;
+                    if ((dataEnd - payloadStart) > skip) payloadStart += skip;
+
+                    const txt = decoder.decode(b.subarray(payloadStart, dataEnd)).replace(/\0/g, '').trim();
+                    if (txt.length) {
+                        foundDataValue = txt;
+                        // store and continue to gather multiple data children if present (concatenate)
+                        const keyName = (keyType === '----' && foundName) ? foundName : keyType;
+                        const normKey = keyName.replace(/[^\w]/g, '').toLowerCase();
+                        if (!out[normKey]) out[normKey] = txt; else out[normKey] += '\n' + txt;
+                    }
+                }
+
+                if (childH.end <= innerOff) innerOff += childH.headerSize; else innerOff = childH.end;
+            }
+
+            if (keyH.end <= off) off += keyH.headerSize; else off = keyH.end;
+        }
+
+        return out;
+    }
+
+    // Try common metadata paths (some files put ilst under moov->udta->meta->ilst, others moov->meta->ilst)
+    const candidatePaths = [
+        ['moov', 'udta', 'meta', 'ilst'],
+        ['moov', 'meta', 'ilst'],
+        ['moov', 'udta', 'ilst']
+    ];
+
+    let parsed = null;
+    for (const p of candidatePaths) {
+        const res = findBoxes(buf, 0, len, p);
+        if (res && res.payloadStart < res.payloadEnd) {
+            try {
+                parsed = parseIlst(buf, res.payloadStart, res.payloadEnd);
+            } catch (e) {
+                console.warn("parseIlst failed:", e);
+            }
+            if (parsed && Object.keys(parsed).length) break;
+        }
+    }
+
+    if (parsed && Object.keys(parsed).length) {
+        metadata.raw.MP4 = parsed;
+
+        // Normalize and map common MP4 ilst keys into distinct buckets without losing any raw data.
+        // Rules:
+        //  - Keep everything in metadata.raw.MP4 (already done) and mirror normalized keys to metadata.raw.<key>
+        //  - Detect encoder/tool fields (Lavf / ffmpeg / etc.) and store under metadata.raw.encoder (do not promote)
+        //  - 'workflow' → metadata.raw.workflow (full ComfyUI workflow JSON)
+        //  - 'cmt' (often reduced ComfyUI inputs JSON) → extract inner "prompt" and set metadata.raw.prompt (do NOT set metadata.raw.parameters)
+        //  - 'prompt' → metadata.raw.prompt (do NOT set metadata.raw.parameters)
+        //  - 'parameters' (A1111 style) → metadata.raw.parameters and call extractAIGenerationParameters (or fallback)
+        //  - Never set metadata.raw.parameters from a 'prompt' mapping; keep them separate.
+
+        const encoderRE = /\b(lavf|lavc|ffmpeg|libav|handbrake|x264|x265|encoder)\b/i;
+        const containsPromptKeywords = /parameters|workflow|prompt|comfyui|cliptextencode|inputs|nodes/i;
+        const looksLikeJSON = (s) => {
+            if (!s) return false;
+            const t = String(s).trim();
+            return t.startsWith('{') || t.startsWith('[');
+        };
+
+        for (const k of Object.keys(parsed)) {
+            const rawVal = parsed[k];
+            const kl = k.toLowerCase();
+            // Mirror raw value for convenience
+            metadata.raw[kl] = rawVal;
+
+            // Encoder/tool detection — keep but never promote as prompt/parameters
+            if (encoderRE.test(String(rawVal || ''))) {
+                metadata.raw.encoder = metadata.raw.encoder || [];
+                metadata.raw.encoder.push({ key: kl, value: rawVal });
+                continue;
+            }
+
+            // 1) Full workflow boxes
+            if (kl === 'workflow' || kl === 'comfyui' || kl === 'workflowjson') {
+                metadata.raw.workflow = rawVal;
+                // If it's JSON, also expose parsed form for downstream use
+                if (looksLikeJSON(rawVal)) {
+                    try { metadata.raw.workflow_json = JSON.parse(rawVal); } catch {}
+                }
+                continue;
+            }
+
+            // 2) cmt -> reduced ComfyUI inputs JSON which commonly contains an inner "prompt" field.
+            if (kl === 'cmt' || kl === 'cmtjson' || kl.includes('cmt')) {
+                if (looksLikeJSON(rawVal)) {
+                    try {
+                        const parsedJson = JSON.parse(rawVal);
+                        let foundKey = false;
+                        // my test WEBM/MP4 files had both the "prompt" AND the "workflow" embedded in the'cmt' box
+                        ['prompt', 'Prompt', 'workflow', 'Workflow'].forEach(key => {
+                            // If it contains an inner "prompt" AND also a "workflow" key, extract it as the canonical prompt and workflow
+                            if (parsedJson && typeof parsedJson === 'object' && (parsedJson[key])) {
+                                foundKey = true;
+                                let inner = parsedJson[key];;
+                                // Normalize inner to string
+                                if (typeof inner === 'object') {
+                                    metadata.raw[key] = JSON.stringify(inner);
+                                } else {
+                                    metadata.raw[key]= String(inner);
+                                }
+                                // Do NOT set metadata.raw.parameters here (per request)
+                                // await
+                                MetadataExtractor.extractParsedMetadata(key, metadata.raw[key], metadata)
+                                    .then().catch(e => {
+                                        console.warn("extractParsedMetadata failed on MP4 cmt->prompt or cmt->workflow:", e);
+                                });
+                            }
+                        });
+
+                        if (!foundKey) {
+                            // Not containing inner prompt/workflow — treat as possible workflow or keep raw
+                            metadata.raw.cmt_json = parsedJson;
+                            // don't promote to parameters
+                        }
+                        else {
+                            // keep parsed cmt JSON for debugging
+                            metadata.raw.cmt_json = parsedJson;
+                        }
+
+                        continue;
+                    } catch (e) {
+                        // not valid JSON — fall through
+                    }
+
+                    continue;
+                }
+
+                // If not JSON but contains prompt/workflow keywords or is long, promote to prompt (not parameters)
+                if (containsPromptKeywords.test(String(rawVal || '')) || (typeof rawVal === 'string' && rawVal.length > 128)) {
+                    metadata.raw.prompt = rawVal;
+                    try {
+                        await MetadataExtractor.extractParsedMetadata("prompt", metadata.raw.prompt, metadata);
+                    } catch (e) {
+                        console.warn("extractParsedMetadata failed on MP4 cmt heuristic:", e);
+                    }
+                }
+                continue;
+            }
+
+            // 3) Direct 'prompt' key -> map to metadata.raw.prompt (do NOT set parameters)
+            if (kl === 'prompt') {
+                if (looksLikeJSON(rawVal)) {
+                    try {
+                        const pObj = JSON.parse(rawVal);
+                        metadata.raw.prompt = typeof pObj === 'string' ? pObj : JSON.stringify(pObj);
+                    } catch {
+                        metadata.raw.prompt = rawVal;
+                    }
+                } else {
+                    metadata.raw.prompt = rawVal;
+                }
+                try {
+                    await MetadataExtractor.extractParsedMetadata("prompt", metadata.raw.prompt, metadata);
+                } catch (e) {
+                    console.warn("extractParsedMetadata failed on direct MP4 prompt:", e);
+                }
+                continue;
+            }
+
+            // 4) parameters-like keys -> metadata.raw.parameters and call extractAIGenerationParameters
+            if (kl === 'parameters' || kl === 'description' || kl === 'comment' || kl === 'usercomment' || kl === 'xpcomment') {
+                metadata.raw.parameters = rawVal;
+                try {
+                    if (typeof MetadataExtractor.extractAIGenerationParameters === 'function') {
+                        await MetadataExtractor.extractAIGenerationParameters(rawVal, metadata);
+                    } else {
+                        await MetadataExtractor.extractParsedMetadata("parameters", rawVal, metadata);
+                    }
+                } catch (e) {
+                    console.warn("extractAIGenerationParameters / extractParsedMetadata failed on MP4 parameters:", e);
+                }
+                continue;
+            }
+
+            // 5) Fallback: if value looks like big JSON or contains prompt/workflow keywords, treat as prompt (but do NOT set parameters)
+            if (!metadata.raw.prompt && (looksLikeJSON(rawVal) || containsPromptKeywords.test(String(rawVal || '')) || (typeof rawVal === 'string' && rawVal.length > 256))) {
+                metadata.raw.prompt = looksLikeJSON(rawVal) ? (typeof rawVal === 'string' ? rawVal : JSON.stringify(rawVal)) : String(rawVal);
+                try {
+                    await MetadataExtractor.extractParsedMetadata("prompt", metadata.raw.prompt, metadata);
+                } catch (e) {
+                    console.warn("extractParsedMetadata failed on MP4 fallback:", e);
+                }
+                continue;
+            }
+
+            // otherwise: keep mirrored raw key and move on
+        }
+    }
+
+    return metadata;
+}
+
+static async parseWEBMMetadata(file, metadata) {
+    const buf = new Uint8Array(await file.arrayBuffer());
+
+    // Quick MP4 detection (ftyp at offset 4)
+    const isMP4 = buf.length >= 12 &&
+        buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70; // "ftyp"
+
+    if (isMP4) {
+        return await this.parseMP4Metadata(file, metadata);
+    }
+
+    // Fallback to EBML walker for true WEBM/Matroska files (existing logic)
+    function readEbmlId(b, offset) {
+        const first = b[offset];
+        let mask = 0x80, length = 1;
+        while ((first & mask) === 0) { mask >>= 1; length++; if (length > 4) break; }
+        let value = 0;
+        for (let i = 0; i < length; i++) value = (value << 8) | b[offset + i];
+        return { value, length };
+    }
+    function readVintInfo(b, offset) {
+        const first = b[offset];
+        let mask = 0x80, length = 1;
+        while ((first & mask) === 0) { mask >>= 1; length++; if (length > 8) break; }
+        let value = first & (mask - 1);
+        for (let i = 1; i < length; i++) value = (value << 8) | b[offset + i];
+        return { value, length };
+    }
+
+    const decoder = new TextDecoder("utf-8", { fatal: false });
+
+    async function walk(b, start, end, depth) {
+        let off = start;
+        let found = false;
+        while (off < end) {
+            try {
+                const { value: idVal, length: idLen } = readEbmlId(b, off); off += idLen;
+                const { value: dataLen, length: sizeLen } = readVintInfo(b, off); off += sizeLen;
+                const payloadStart = off, payloadEnd = payloadStart + dataLen;
+                if (payloadEnd > end) break;
+
+                // 🔍 new: sniff into *all* small payloads, not just Tags
+                const MAX_SNIFF = 4096;
+                if (dataLen > 0 && dataLen <= MAX_SNIFF) {
+                    const snippet = decoder.decode(b.subarray(payloadStart, payloadEnd));
+                    if (/parameters|workflow|prompt/i.test(snippet)) {
+                        metadata.raw = metadata.raw || {};
+                        if (!metadata.raw.WEBM_textSnippets) metadata.raw.WEBM_textSnippets = [];
+                        metadata.raw.WEBM_textSnippets.push(snippet);
+
+                        metadata.raw.parameters = snippet;
+                        await MetadataExtractor.extractParsedMetadata("parameters", snippet, metadata);
+                        found = true;
+                    }
+                }
+
+                // Always recurse into containers (heuristic: big payloads)
+                if (dataLen > 0 && (idVal === 0x1254C367 || idVal === 0x18538067 || dataLen > 64)) {
+                    const ok = await walk(b, payloadStart, payloadEnd, depth + 1);
+                    if (ok) found = true;
+                }
+
+                off = payloadEnd;
+            } catch {
+                break;
+            }
+        }
+        return found;
+    }
+
+    try {
+        const found = await walk(buf, 0, buf.length, 0);
+        if (found) return metadata;
+    } catch (e) {
+        console.warn("WEBM EBML walker failed:", e);
+    }
+
+    // fallback: plain 1MB sniff
+    await this.fallbackTextSearchFromBuffer(buf, metadata);
+    return metadata;
+}
+
+
+// END of class MetadataParsers
 
 } // END of class MetadataParsers
 

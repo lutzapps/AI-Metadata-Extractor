@@ -5,6 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Metadata Extractor</title>
     <link rel="stylesheet" href="css/styles.css">
+
+    <!-- <link rel="icon" type="image/png" href="ai-image-logo.png"> -->
+    <!-- Or for .ico files: -->
+    <!-- <link rel="shortcut icon" type="image/x-icon" href="/path/to/your/favicon.ico"> -->
+
+    <!-- Standard PNG favicons -->
+    <link rel="icon" type="image/png" sizes="16x16" href="res/icon-set/app-icon-16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="res/icon-set/app-icon-32.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="res/icon-set/app-icon-512.png">
+
+    <!-- iOS -->
+    <link rel="apple-touch-icon" sizes="180x180" href="res/icon-set/app-icon-180.png">
+
+    <!-- Legacy fallback -->
+    <link rel="shortcut icon" type="image/x-icon" href="res/icon-set/app-icon.ico">
+
+    <!-- PWA support -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1976d2">
+
+    <!--
+    This way:
+        - Desktop browsers use favicons as usual.
+        - Android/Chrome can “install” the app and use the bigger icons.
+        - iOS Safari uses the apple-touch-icon.
+        - Maskable icons ensure your icon looks good inside rounded shapes (Android adaptive icons).
+    -->
 </head>
 <body>
     <!--
@@ -34,7 +61,255 @@
         </symbol>
     </svg>
 
+    <!-- Settings dialog v2
+        ✨ Improvements this brings
+        Grid layout → automatically 2+ columns on wider screens.
+        Scrollable modal → no more “buttons hidden below viewport”.
+        Sticky Save/Reset row → always visible at the bottom of modal.
+        Tooltips → you can keep labels short but still provide details.
+
+        We can sprinkle data-tooltip="..." on any <label> and it’ll show on hover.
+
+        <fieldset class="settings-group">
+            <legend>Gallery Dimensions</legend>
+
+            <label data-tooltip="Thumbnail height in pixels (60–300)">
+                Thumbnail height:
+                <input type="number" id="setting-galleryThumbHeight" min="60" max="300" step="10">
+            </label><br>
+
+            <label data-tooltip="How much bigger the image looks when hovering (1–4)">
+                Pop-out scale:
+                <input type="number" id="setting-galleryPopoutScale" min="1" max="4" step="0.1">
+            </label>
+        </fieldset>
+
+    ✨ Features now
+        2+ columns layout (responsive, auto wraps if narrow).
+        Scrollable when too tall.
+        Sticky buttons so Save/Reset always accessible.
+        Tooltips (hover labels for inline help).
+    -->
+
+    <!-- Settings modal v2 (hidden by default) -->
+    <div id="settings-panel" class="settings-modal hidden">
+    <div class="settings-content">
+        <span class="close-btn settings">&times;</span>
+
+        <h2>Settings</h2>
+
+        <!-- Gallery -->
+        <fieldset class="settings-group">
+            <legend>Gallery Dimensions</legend>
+
+            <label data-tooltip="Thumbnail height in pixels (60–300)">
+                Thumbnail height:
+                <input type="number" id="setting-galleryThumbHeight" min="60" max="300" step="10">
+            </label><br>
+
+            <label data-tooltip="How much bigger the image looks when hovering (1–4)">
+                Pop-out scale:
+                <input type="number" id="setting-galleryPopoutScale" min="1" max="4" step="0.1">
+            </label>
+        </fieldset>
+
+        <!-- Modal Image -->
+        <fieldset class="settings-group">
+            <legend>Modal Image Size Conversions</legend>
+
+            <label data-tooltip="Use scaled image as served by CivitAI">
+                <input type="checkbox" id="setting-modalDefaultImage"> Default scaled image
+            </label><br>
+
+            <label data-tooltip="Request the original upload instead of scaled version">
+                <input type="checkbox" id="setting-modalOriginal"> Original image
+            </label><br>
+
+            <label data-tooltip="Target height (only applies if 'Original image' is NOT checked)">
+                Image Height:
+                <input type="number" id="setting-modalImageHeight" min="512" max="2048" step="512">
+            </label><br>
+
+            <label data-tooltip="JPEG compression quality (70–100%)">
+                JPEG Quality (%):
+                <input type="number" id="setting-modalImageQuality" min="70" max="100" step="5">
+            </label><br>
+
+            <label data-tooltip="Force PNG request (helps keep embedded workflows)">
+                <input type="checkbox" id="setting-modalForcePNG"> Force PNG
+            </label>
+        </fieldset>
+
+        <!-- Zoom -->
+        <fieldset class="settings-group">
+            <legend>Image Zoom</legend>
+
+            <label data-tooltip="Enable 'zoom panel' UI and +/-/0 keyboard shortcuts">
+                <input type="checkbox" id="setting-zoomPanelEnabled"> Show zoom panel
+            </label><br>
+
+            <label data-tooltip="Zoom in/out step (0.5–5)">
+                Zoom step:
+                <input type="number" id="setting-zoomStep" min="0.5" max="5" step="0.5">
+            </label><br>
+
+            <label data-tooltip="0.5 = 50% minimum zoom scale (0.5–1)">
+                Minimum Zoom scale:
+                <input type="number" id="setting-minZoomScale" min="0.5" max="1" step="0.5">
+            </label><br>
+
+            <label data-tooltip="5 = 500% maximum zoom scale (1–10)">
+                Maximum Zoom scale:
+                <input type="number" id="setting-maxZoomScale" min="1" max="10" step="0.5">
+            </label><br>
+
+            <label data-tooltip="Click on image to zoom in/out automatically. autoZoom (with [Shift]-Click) always Zoom-Out">
+                <input type="checkbox" id="setting-autoZoom"> Enable click-to-zoom (autoZoom)
+            </label><br>
+
+            <label data-tooltip="Zoom step multiplier for auto zoom (e.g. 2 = 200%)">
+                Auto Zoom Step:
+                <input type="number" id="setting-autoZoomStep" min="1" max="5" step="2.5">
+            </label><br>
+
+            <label data-tooltip="'autoZoom' in only ONCE with 'autoZoomStep' (and then toggle back to normal).">
+                <input type="radio" name="autoZoomVersion" value="1" id="autoZoomVersion-1"> Click-Once Toggle
+            </label><br>
+
+            <label data-tooltip="combine with 'zoom-panel' and allow MULTIPLE autoZoomStep(s) up to 'maxZoomScale'.">
+                <input type="radio" name="autoZoomVersion" value="2" id="autoZoomVersion-2"> Integrate with Zoom-Controls
+            </label>
+        </fieldset>
+
+        <!-- Info Overlay -->
+        <fieldset class="settings-group">
+            <legend>Media Info Overlay (Space key)</legend>
+
+            <label data-tooltip="Font size of info overlay text">
+                Font size (px):
+                <input type="number" id="setting-infoFontSize" min="6" max="26" step="2">
+            </label><br>
+
+            <label data-tooltip="Start with overlay visible by default">
+                <input type="checkbox" id="setting-showMediaInfo"> Show info by default
+            </label><br>
+
+            <label data-tooltip="Keep overlay state when moving through gallery">
+                <input type="checkbox" id="setting-persistInfoOverlay"> Persist overlay state
+            </label>
+        </fieldset>
+
+        <!-- Media Processing -->
+        <fieldset class="settings-group">
+            <legend>Media Processing (Enter key)</legend>
+
+            <label data-tooltip="Open the original in a new browser tab">
+                <input type="checkbox" id="setting-openOriginal"> Open Original in new Tab
+            </label><br>
+
+            <label data-tooltip="Load the original into the app for analysis">
+                <input type="checkbox" id="setting-loadIntoApp"> Load into App
+            </label><br>
+
+            <label data-tooltip="Automatically download the original file">
+                <input type="checkbox" id="setting-autoDownload"> Auto Download
+            </label>
+        </fieldset>
+
+        <!-- Download Format -->
+        <fieldset class="settings-group">
+            <legend>Download Format (Enter key)</legend>
+
+            <label data-tooltip="JPEG quality for downloads (70–100%)">
+                JPEG Quality (%):
+                <input type="number" id="setting-downloadImageQuality" min="70" max="100" step="5"> 
+            </label><br>
+
+            <label data-tooltip="Force PNG download (keeps workflows if embedded)">
+                <input type="radio" name="downloadFormat" value="png" id="downloadFormat-png"> PNG
+            </label><br>
+
+            <label data-tooltip="Force JPEG download (smaller file, lossy)">
+                <input type="radio" name="downloadFormat" value="jpeg" id="downloadFormat-jpeg"> JPEG
+            </label><br>
+
+            <label data-tooltip="Use whatever format the server provides">
+                <input type="radio" name="downloadFormat" value="original" id="downloadFormat-original"> Original
+            </label>
+        </fieldset>
+
+        <!-- Modal Choice (Radio buttons) -->
+        <fieldset class="settings-group">
+            <legend>Default Modal Dialog</legend>
+
+            <label data-tooltip="Extended viewer with zoom, metadata, etc.">
+                <input type="radio" name="modalChoice" value="modal" id="modalChoice-modal"> Extended Modal
+            </label><br>
+
+            <label data-tooltip="Minimal viewer, just image/video">
+                <input type="radio" name="modalChoice" value="modalEx" id="modalChoice-modalEx"> Standard Modal
+            </label>
+        </fieldset>
+
+        <!-- Actions -->
+        <div class="settings-actions">
+            <button id="save-settings-btn">Save</button>
+            <button id="reset-settings-btn">Reset to Defaults</button>
+        </div>
+    </div>
+    </div>
+
+
+    <!-- Media Modal Dialog GPT-5 -->
+    <div id="media-modal" class="media-modal hidden">
+        <span class="close-btn modal">&times;</span>
+
+        <div id="zoom-controls" class="zoom-controls">
+            <button class="zoom-btn in">+</button>
+            <button class="zoom-btn reset">0</button>
+            <button class="zoom-btn out">−</button>
+            <span id="current-zoomScale" class="current-zoomScale">(1)</span>
+        </div>
+
+        <span class="nav-btn prev">&#10094;</span>
+        <span class="nav-btn next"  >&#10095;</span>
+
+        <div id="media-container" class="media-container">
+            <!-- Spinner -->
+            <div id="modal-spinner" class="modal-spinner hidden"></div>
+
+            <img id="modal-image" class="modal-media media-hidden" alt="Fullsize Sample Image">
+            <video id="modal-video" class="modal-media media-hidden" controls autoplay loop></video>
+            <div id="modal-media-info" class="modal-media-info hidden button-anchor"></div>
+        </div>
+    </div>
+
+    <!-- original extended Media ModalEx Dialog -->
+    <div id="media-modal-ex" class="media-modal hidden">
+        <span class="close-btn modal">&times;</span>
+        <div id="zoom-controls-ex" class="zoom-controls">
+            <button class="zoom-btn in">+</button>
+            <button class="zoom-btn reset">Reset</button>
+            <button class="zoom-btn out">−</button>
+            <span id="current-zoomScale-ex" class="current-zoomScale">(1)</span>
+        </div>
+        <div id="media-container-ex" class="media-container">
+            <!-- Spinner -->
+            <div id="modal-spinner-ex" class="modal-spinner hidden"></div>
+
+            <img id="modal-image-ex" class="modal-media media-hidden" alt="Fullsize Sample Image">
+            <video id="modal-video-ex" class="modal-media media-hidden" controls autoplay loop></video>
+            <div id="modal-media-info-ex" class="modal-media-info hidden button-anchor"></div>
+        </div>
+    </div>
+
+
     <div class="container">
+        <div class="main-buttons-group">
+            <button id="settings-btn" class="settings-btn">⚙️ Settings</button>
+            <button id="clear-cache-btn" class="clear-cache-btn">🧹 Clear Runtime Cache</button> <!-- ✅ -->
+        </div>
+
         <header>
             <h1>AI Metadata Extractor</h1>
             <p>Extract ComfyUI workflow, AI generation parameters, and all used Model resources from AI generated CivitAI images and videos.</p>
@@ -47,14 +322,14 @@
                         <path fill="currentColor" d="M19.35,10.04C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.04C2.34,8.36 0,10.91 0,14A6,6 0 0,0 6,20H19A5,5 0 0,0 24,15C24,12.36 21.95,10.22 19.35,10.04M14,13V17H10V13H7L12,8L17,13H14Z" />
                     </svg>
                     <h2>Drag & Drop Files Here</h2>
-                    <p>Supports PNG, JPEG, WEBP images and video files</p>
+                    <p>Supports PNG, JPEG, WEBP, GIF images and MP4, WEBM video files</p>
                     <p>or</p>
                     <button id="browse-btn" class="browse-btn">Browse Files</button>
-                    <input type="file" id="file-input" accept=".png,.jpg,.jpeg,.gif,.webp,.webm,.mp4,.avi,.mov" multiple hidden>
+                    <input type="file" id="file-input" accept=".png,.jpg,.jpeg,.gif,.webp,.webm,.mp4,.mpg,.avi,.mov" multiple hidden>
                 </div>
             </div>
 
-            <div id="results" class="results hidden">
+            <div id="results" class="results hidden"><!-- "keydown" global event handling -->
                 <div class="file-info">
                     <h2>File Information</h2>
                     <div class="file-info-content">
@@ -67,46 +342,95 @@
                     <div class="section">
                         <div class="section-header">
                             <h2>AI Generation Parameters</h2>
-                            <button class="toggle-btn" data-target="parameters-content">▼</button>
+                            <button class="toggle-btn" data-target="parameters-group">▼</button>
                         </div>
-                        <div id="parameters-content" class="section-content">
-                            <div id="parameters-data"></div>
-                        </div>
-                        <!-- //CHECK new UI
-                        <div class="button-anchor">
-                            <div class="code-block">
-                                <pre><code>
-                                console.log("Hello Roman!");
-                                </code></pre>
-                                <button class="copy-btn">Copy</button>
+                        <div id="parameters-group" class="section-group">
+                            <div id="parameters-content" class="section-content">
+                                <div id="parameters-data"></div>
+                            </div>
+                            <div id="comfyui-inputs-content" class="section-content">
+                                <div id="comfyui-inputs-data" class="button-anchor"></div>
                             </div>
                         </div>
-                        <div class="button-anchor">
-                            <div class="code-block">
-                                <pre><code>
-                                function greet(name) {
-                                return `Hello, ${name}!`;
-                                }
-                                </code></pre>
-                                <button class="copy-btn">Copy</button>
-                            </div>
-                        </div>
-                         -->
-                        <!-- all <code> divs and <button class="copy-btn"> buttons
-                          are generated by JavaScript filling the "xxx-data" divs -->
-                        <div id="model-hashes-content" class="section-content">
-                            <!-- only CSS styles ".metadata-item" and ".button-anchor
-                              have the "position: relative;" defined to "anchor" the copy button -->
+                    </div>
 
-                            <!-- Variante 1: we can enclose the data div in a parent div with class="button-anchor",
-                              to not loose the copy button (to go up to the body) -->
-                            <div class="button-anchor">
-                                <div id="model-hashes-data"></div>
-                            </div>
+                    <!--
+                    <div class="section">
+                        <div class="section-header">
+                            <h2>Sample Data</h2>
+                            <button class="toggle-btn" data-target="sample-group">▼</button>
                         </div>
-                        <div id="comfyui-inputs-content" class="section-content">
-                            <!-- Variante 2: we can just define the class="button-anchor" on the data div itself -->
-                            <div id="comfyui-inputs-data" class="button-anchor"></div>
+                        <div id="sample-group" class="section-group">
+                            <div id="sample1-content" class="section-content">
+                                <div id="sample1-data">
+                                    <div class="metadata-item"><code>
+                                        This is Sample Data
+                                    </code></div>
+                                </div>
+                            </div>
+                    -->
+                            <!-- all <code> divs and <button class="copy-btn"> buttons
+                            are generated by JavaScript filling the "xxx-data" divs -->
+                            <!-- <div id="sample2-content" class="section-content"> -->
+                                <!-- only CSS styles
+                                  ".metadata-item" (as in above "sample1-data" div) and
+                                  ".button-anchor
+                                    have the "position: relative;" defined to "anchor" the copy button
+                                -->
+
+                                <!-- Variante 1: we can enclose the data div in a parent div with class="button-anchor",
+                                    to not loose the copy button (to go up to the body) -->
+                            <!--
+                                <div class="button-anchor">
+                                    <div id="sample2-data"><code>Sample2 code</code></div>
+                                </div>
+                            </div>
+                            <div id="sample3-content" class="section-content">
+                            -->
+                                <!-- Variante 2: we can just define the class="button-anchor" on the data div itself -->
+                            <!--
+                                <div id="sample3-data" class="button-anchor"><code>Sample3 code</code></div>
+                            </div>
+                            -->
+                            <!-- //CHECK new UI with copy buttons -->
+                            <!--
+                            <div class="button-anchor">
+                                <div class="code-block">
+                                    <pre><code>
+                                        console.log("Hello Roman!");
+                                    </code></pre>
+                                    <button class="copy-btn">Copy</button>
+                                </div>
+                            </div>
+                            <div class="button-anchor">
+                                <div class="code-block">
+                                    <pre><code>
+                                        function greet(name) {
+                                            return `Hello, ${name}!`;
+                                        }
+                                    </code></pre>
+                                    <button class="copy-btn">Copy</button>
+                                </div>
+                            </div>
+                            -->
+                            <!-- end of sample -->
+                    <!--
+                        </div>
+                    </div>
+                    -->
+                    <div class="section">
+                        <div class="section-header">
+                            <h2>Used Resources</h2>
+                            <button class="toggle-btn" data-target="resources-content">▼</button>
+                        </div>
+
+                        <div id="resources-content" class="section-content">
+                            <h3>Resolved Models</h3>
+                            <div id="resources-data">
+                                <!-- resolvedModels -->
+                            </div>
+                            <h3>Model Hashes</h3>
+                            <div id="model-hashes-data" class="button-anchor"></div>
                         </div>
                     </div>
 
@@ -149,14 +473,15 @@
         </main>
 
         <footer>
-            <p>AI Metadata Extractor - All processing happens in your browser<br>© 2025 by lutzapps, all rights reserved.</p>
+            <p>AI Metadata Extractor (v0.9) - All processing happens in your browser<br>© 2025 by lutzapps, all rights reserved.</p>
         </footer>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/exifreader@4.21.1/dist/exif-reader.js"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/exifreader@4.21.1/dist/exif-reader.js"></script> -->
     <script src="js/metadata-extractor.js"></script>
     <script src="js/parsers.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/main.js"></script>
+
 </body>
 </html>
